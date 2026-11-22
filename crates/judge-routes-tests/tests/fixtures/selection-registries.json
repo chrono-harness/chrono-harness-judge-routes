@@ -1,0 +1,377 @@
+{
+  ".chrono-harness/config.json": {
+    "schema_version": 1,
+    "status": "active",
+    "enforcement": "enabled",
+    "runner": {
+      "path": ".chrono-harness/bin/chrono-harness",
+      "version": "0.1.0",
+      "sha256": "4efce217579994414227fa5a4aabcd897ecc1e02c62f512858f482a9318500f4"
+    },
+    "registries": {
+      "judges": ".chrono-harness/judges.json",
+      "projects": ".chrono-harness/projects.json",
+      "filemap": ".chrono-harness/FILEMAP.json",
+      "workflow": ".chrono-harness/workflow.json"
+    },
+    "canonical_check": {
+      "operation": "validate.delta",
+      "argv": [
+        ".chrono-harness/bin/chrono-harness",
+        "check",
+        "--config",
+        ".chrono-harness/config.json",
+        "--base",
+        "{base}",
+        "--candidate",
+        "{candidate}",
+        "--context",
+        ".chrono-harness/state/context.json"
+      ]
+    },
+    "protocol": {
+      "id": "chrono-judge/v1",
+      "timeout_seconds": 2400,
+      "stdout_limit_bytes": 67108864,
+      "encoding": "UTF-8"
+    },
+    "environment": {
+      "inherit": [
+        "PATH"
+      ],
+      "values": {},
+      "inputs": [
+        {
+          "id": "python-runtime",
+          "location": "/usr/bin/python3",
+          "sha256": "34129c71a01a74f7f3b2443521519b2e5447553fa187f5fcafaaf8c42cc192e2"
+        }
+      ]
+    },
+    "input_closure": {
+      "status": "declared-complete",
+      "unresolved": []
+    },
+    "tools": [
+      {
+        "id": "python3",
+        "program": "/usr/bin/python3",
+        "resolution": "PATH-once",
+        "version_argv": [
+          "--version"
+        ],
+        "expected_version": "Python 3.9.6"
+      }
+    ],
+    "semantic_fields": [],
+    "artifacts": [
+      {
+        "path": ".chrono-harness/bin/",
+        "owner": "host",
+        "kind": "executable",
+        "tracked": false
+      },
+      {
+        "path": ".chrono-harness/state/",
+        "owner": "host",
+        "kind": "evidence",
+        "tracked": false
+      }
+    ]
+  },
+  ".chrono-harness/judges.json": {
+    "schema_version": 1,
+    "status": "active",
+    "migration_validator": "registration",
+    "judges": [
+      {
+        "id": "registration",
+        "executable": ".chrono-harness/bin/chrono-judge-registration",
+        "sha256": "766a7f30898774f7ecbf8346a6935b13c9b7a28bfefe3e9842eb19bc13bfdb27",
+        "argv": [
+          "--protocol",
+          "chrono-judge/v1"
+        ],
+        "selector": "every-delta",
+        "after": [],
+        "modes": [
+          "evaluate"
+        ],
+        "version": "0.1.0"
+      },
+      {
+        "id": "filemap",
+        "executable": ".chrono-harness/bin/chrono-judge-filemap",
+        "sha256": "f5d5cce8ff8680fd6240cf90d53e04571f827dc822563d1eec028934e06be64a",
+        "argv": [
+          "--protocol",
+          "chrono-judge/v1"
+        ],
+        "selector": "every-delta",
+        "after": [
+          "registration"
+        ],
+        "modes": [
+          "evaluate"
+        ],
+        "version": "0.1.0"
+      },
+      {
+        "id": "projects",
+        "executable": ".chrono-harness/bin/chrono-judge-projects",
+        "sha256": "98b17604cc1f0579a43872287a3fa9465f2386414c876f9a33e45fe30f2083dd",
+        "argv": [
+          "--protocol",
+          "chrono-judge/v1"
+        ],
+        "selector": "every-delta",
+        "after": [
+          "registration",
+          "filemap",
+          "routes"
+        ],
+        "modes": [
+          "evaluate"
+        ],
+        "version": "0.1.0"
+      },
+      {
+        "id": "routes",
+        "executable": ".chrono-harness/bin/chrono-judge-routes",
+        "sha256": "a09d93e4d77b9f1f922161a3e7b8e5c937467c66b5916e4b2f4494845fa78f44",
+        "argv": [
+          "--protocol",
+          "chrono-judge/v1"
+        ],
+        "selector": "every-delta",
+        "after": [
+          "registration",
+          "filemap"
+        ],
+        "modes": [
+          "evaluate"
+        ],
+        "version": "0.1.0"
+      },
+      {
+        "id": "cost",
+        "executable": ".chrono-harness/bin/chrono-judge-cost",
+        "sha256": "28f59e920c66644d5a411a0f6f0e3ec89041f1efc723fc71db94d4467729766d",
+        "argv": [
+          "--protocol",
+          "chrono-judge/v1"
+        ],
+        "selector": "every-delta",
+        "after": [
+          "registration",
+          "filemap"
+        ],
+        "modes": [
+          "evaluate"
+        ],
+        "version": "0.1.0"
+      }
+    ]
+  },
+  ".chrono-harness/projects.json": {
+    "schema_version": 1,
+    "status": "active",
+    "owners": [
+      "host",
+      "message",
+      "example"
+    ],
+    "projects": [],
+    "scripts": [
+      {
+        "id": "message",
+        "path": "message.py",
+        "test_script": "example",
+        "actions": {
+          "execute": {
+            "operation": "example.program",
+            "tool": "python3",
+            "argv": [
+              "-B",
+              "message.py"
+            ]
+          }
+        }
+      },
+      {
+        "id": "example",
+        "path": "check.py",
+        "tests_for": "message",
+        "actions": {
+          "execute": {
+            "operation": "example.check",
+            "tool": "python3",
+            "argv": [
+              "-B",
+              "check.py"
+            ]
+          }
+        }
+      }
+    ]
+  },
+  ".chrono-harness/FILEMAP.json": {
+    "schema_version": 2,
+    "status": "active",
+    "files": [
+      {
+        "path": ".gitignore",
+        "owner": "host",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": []
+      },
+      {
+        "path": "message.py",
+        "owner": "message",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:example"
+          }
+        ]
+      },
+      {
+        "path": "check.py",
+        "owner": "example",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:example"
+          }
+        ]
+      },
+      {
+        "path": "message.txt",
+        "owner": "host",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": [
+          {
+            "kind": "test-execution",
+            "to": "test:example"
+          }
+        ]
+      },
+      {
+        "path": ".chrono-harness/config.json",
+        "owner": "host",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": []
+      },
+      {
+        "path": ".chrono-harness/projects.json",
+        "owner": "host",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": []
+      },
+      {
+        "path": ".chrono-harness/FILEMAP.json",
+        "owner": "host",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": []
+      },
+      {
+        "path": ".chrono-harness/judges.json",
+        "owner": "host",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": []
+      },
+      {
+        "path": ".chrono-harness/workflow.json",
+        "owner": "host",
+        "surface": "product",
+        "cost": "unmeasured",
+        "edges": []
+      }
+    ],
+    "project_edges": [
+      {
+        "from": "input:python-runtime",
+        "kind": "runtime-input",
+        "to": "script:message"
+      },
+      {
+        "from": "script:message",
+        "kind": "test-execution",
+        "to": "test:example"
+      }
+    ],
+    "cost_models": {
+      "unmeasured": {
+        "cpu_ms": null,
+        "wall_ms": null,
+        "peak_rss_bytes": null,
+        "io_bytes": null,
+        "basis": "unknown"
+      }
+    },
+    "test_costs": [
+      {
+        "test": "example",
+        "cost": "unmeasured"
+      }
+    ],
+    "execution_plans": {
+      "test:example": {
+        "operations": [
+          "example.check"
+        ],
+        "timeout_seconds": 600,
+        "output_limit_bytes": 1048576
+      }
+    }
+  },
+  ".chrono-harness/workflow.json": {
+    "schema_version": 2,
+    "status": "active",
+    "target_branch": "dev",
+    "feature_prefix": "feature/",
+    "integration_prefix": "integration/",
+    "staleness": {
+      "max_behind_commits": 3,
+      "max_age_hours": 24,
+      "combine": "any-exceeded"
+    },
+    "stability": [],
+    "semantic_changes_require_integration": true,
+    "mixed_change": {
+      "level": "warning",
+      "code": "W_MIXED_JUDGE_PRODUCT",
+      "requires_acknowledgement": false
+    },
+    "integration": {
+      "tests": [
+        "example"
+      ],
+      "bind": [
+        "base",
+        "candidate_tree",
+        "registry_digest",
+        "executables",
+        "tools",
+        "environment",
+        "effective_inputs",
+        "required_tests",
+        "results_digest"
+      ],
+      "evidence": ".chrono-harness/state/integration.json"
+    },
+    "retirements": [],
+    "migrations": [],
+    "historical_profiles": []
+  }
+}
