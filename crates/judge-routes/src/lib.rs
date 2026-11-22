@@ -786,42 +786,38 @@ pub fn judge(req: &Request) -> Response {
     }
     response
 }
-/// Shared global obligations; callers select a transport scope only after this succeeds.
 #[cfg(not(verus_keep_ghost))]
-pub fn global_selection(
-    old: &Registrations,
-    r: &Registrations,
-    impact: &chrono_judge_filemap::Impact,
-    deferred: bool,
-) -> Result<BTreeSet<String>, String> {
-    let mut selected: BTreeSet<_> = impact.tests.iter().cloned().collect();
-    for test in &impact.retired_tests {
-        match chrono_judge_registration::validate_test_retirement(old, r, test)? {
-            Some(replacement) => {
-                selected.insert(replacement);
-            }
-            // The downstream validator approves joint removal after consuming
-            // current execution results; historical methods remain input data.
-            None if deferred => {}
-            None => return Err(format!("E_REQUIRED_TEST_REMOVED: {test}")),
-        }
-    }
-    Ok(selected)
-}
+mod impact;
+#[cfg(not(verus_keep_ghost))]
+pub mod selection;
 #[cfg(not(verus_keep_ghost))]
 fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Value>, String> {
     req.validate()?;
     let (old, r, view) = chrono_judge_registration::views_with_reader(req, reader)?;
     canonical(req, &r)?;
-    let impact: chrono_judge_filemap::Impact =
-        serde_json::from_value(req.impact.clone()).map_err(|e| format!("E_IMPACT: {e}"))?;
-    if impact.schema != chrono_judge_filemap::IMPACT_SCHEMA || impact.delta != req.delta {
+    let env = serde_json::from_value(req.observations["environment"]["effective"].clone())
+        .map_err(|e| e.to_string())?;
+    let impact = impact::decode(
+        &req.impact,
+        &r.config()["protocol"],
+        &env,
+        |command, input| {
+            let process = chrono_harness::run_process(&req.candidate.root, command, input)?;
+            Ok((
+                process.exit_code,
+                process.stdout_bytes,
+                process.stderr_bytes,
+            ))
+        },
+    )?;
+    if impact.schema != "chrono-filemap-impact/v6" || impact.delta != req.delta {
         return Err("E_IMPACT: identity".into());
     }
-    let selected = global_selection(
+    let selected = selection::global_selection(
         &old,
         &r,
-        &impact,
+        &impact.tests,
+        &impact.retired_tests,
         chrono_judge_registration::downstream_validator(&r, &req.judge_id),
     )?;
     let inputs = if matches!(
@@ -832,8 +828,6 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
     } else {
         chrono_judge_registration::inputs::validate(req, &old, &r)?
     };
-    let env = serde_json::from_value(req.observations["environment"]["effective"].clone())
-        .map_err(|e| e.to_string())?;
     let reused = chrono_judge_registration::reused_tools(&view)?;
     // First prepare the global graph.  This validates every selected plan and
     // its prerequisites even when the caller asks for one unit only.
@@ -845,7 +839,6 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
         serde_json::from_value(old.filemap().clone()).map_err(|error| error.to_string());
     let registry: chrono_harness::verified_verifier::sources::SourceRegistry =
         serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?;
-    let affected = impact.closure.reached.keys().cloned().collect::<Vec<_>>();
     let continuity = chrono_harness::verified_verifier::sources::continuity::observe(
         reader,
         &req.candidate.root,
@@ -867,12 +860,15 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
                 .map(str::to_owned)
                 .collect(),
         ),
-        &chrono_harness::verified_verifier::sources::continuity_paths(&registry.files, &affected),
+        &chrono_harness::verified_verifier::sources::continuity_paths(
+            &registry.files,
+            &impact.reached,
+        ),
     )?;
     validate_proof_plan(
         &registry,
         previous_registry.as_ref().map(Some).map_err(String::as_str),
-        &impact.closure.reached.keys().cloned().collect(),
+        &impact.reached.into_iter().collect(),
         &methods,
         &global_operations,
         &continuity,

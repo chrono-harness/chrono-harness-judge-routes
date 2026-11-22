@@ -80,28 +80,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "chrono-judge-filemap"
-version = "0.1.0"
-source = "git+https://github.com/chrono-harness/chrono-harness-judge-filemap.git?rev=545c03a0df4259921d927e3e9fffd9fa2b65c68d#545c03a0df4259921d927e3e9fffd9fa2b65c68d"
-dependencies = [
- "chrono-harness",
- "chrono-judge-mixed",
- "chrono-judge-registration",
- "serde",
- "serde_json",
-]
-
-[[package]]
-name = "chrono-judge-mixed"
-version = "0.1.0"
-source = "git+https://github.com/chrono-harness/chrono-harness-judge-mixed.git?rev=3d8cdc0d062b123a31aecddd5fb0fedee0a914ea#3d8cdc0d062b123a31aecddd5fb0fedee0a914ea"
-dependencies = [
- "chrono-harness",
- "chrono-judge-registration",
- "serde_json",
-]
-
-[[package]]
 name = "chrono-judge-registration"
 version = "0.1.0"
 source = "git+https://github.com/chrono-harness/chrono-harness-judge-registration.git?rev=76530cce04ad04ebda2f71a16a8a51f930c2daa8#76530cce04ad04ebda2f71a16a8a51f930c2daa8"
@@ -117,7 +95,6 @@ name = "chrono-judge-routes"
 version = "0.1.0"
 dependencies = [
  "chrono-harness",
- "chrono-judge-filemap",
  "chrono-judge-registration",
  "serde",
  "serde_json",
