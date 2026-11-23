@@ -57,10 +57,7 @@ use chrono_harness::{
     wire::{self, Finding, Request, Response, Status},
 };
 #[cfg(not(verus_keep_ghost))]
-use chrono_judge_registration::{
-    Registrations,
-    execution::{Method, Plan, Scheduling},
-};
+use chrono_judge_registration::execution::{Method, Plan, Scheduling};
 #[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
 #[cfg(not(verus_keep_ghost))]
@@ -527,12 +524,12 @@ pub fn validate_invocation(
     chrono_harness::resolve_invocation(root, entry, template, binding).map(|_| ())
 }
 #[cfg(not(verus_keep_ghost))]
-pub fn canonical(req: &Request, r: &Registrations) -> Result<(), String> {
+fn canonical(req: &Request, config: &Value) -> Result<(), String> {
     let mut expected: Vec<String> =
-        serde_json::from_value(r.config()["canonical_check"]["argv"].clone())
+        serde_json::from_value(config["canonical_check"]["argv"].clone())
             .map_err(|e| e.to_string())?;
     if let Some(scope) = &req.scope {
-        expected.extend(scope.contract_argv(r.config()));
+        expected.extend(scope.contract_argv(config));
     }
     validate_invocation(
         &req.candidate.root,
@@ -540,10 +537,10 @@ pub fn canonical(req: &Request, r: &Registrations) -> Result<(), String> {
         &expected,
         &json!({"base":req.base.commit,"candidate":req.candidate.commit}),
     )?;
-    if r.config()["schema_version"] == 4 {
+    if config["schema_version"] == 4 {
         chrono_harness::prepared::validate_binding(
             &req.candidate.root,
-            r.config(),
+            config,
             &req.config_path,
             Some(&req.base.commit),
             &req.candidate.commit,
@@ -552,9 +549,6 @@ pub fn canonical(req: &Request, r: &Registrations) -> Result<(), String> {
             Some(&req.context),
             &req.observations["preparation"],
         )?;
-    }
-    if chrono_judge_registration::execution::methods(r.projects())?.contains_key("validate.delta") {
-        return Err("E_ROUTE_AMBIGUOUS: validate.delta".into());
     }
     Ok(())
 }
@@ -703,19 +697,6 @@ fn compare_validated(
     )
 }
 #[cfg(not(verus_keep_ghost))]
-pub fn execute_actions(r: &Registrations) -> BTreeMap<String, String> {
-    unique_actions(r.test_bindings().into_iter().map(|(id, bindings)| {
-        (
-            id,
-            bindings
-                .into_iter()
-                .map(|binding| binding.operation)
-                .collect(),
-        )
-    }))
-}
-
-#[cfg(not(verus_keep_ghost))]
 fn unique_actions(
     bindings: impl IntoIterator<Item = (String, Vec<String>)>,
 ) -> BTreeMap<String, String> {
@@ -730,13 +711,10 @@ fn unique_actions(
 #[cfg(not(verus_keep_ghost))]
 pub fn judge(req: &Request) -> Response {
     let mut response = req.response(Status::Pass);
-    let reader = facts::Reader::for_request(req);
-    let result = reader
-        .as_ref()
-        .map_err(Clone::clone)
-        .and_then(|reader| evaluate(req, reader));
-    if let Ok(reader) = &reader {
-        reader.record(&mut response);
+    let mut git = Value::Null;
+    let result = evaluate(req, &mut git);
+    if !git.is_null() {
+        response.outputs.insert("git_facts".into(), git);
     }
     match result {
         Ok(outputs) => response.outputs.extend(outputs),
@@ -770,15 +748,22 @@ pub mod source_plan;
 pub mod verified_source_pipeline;
 
 #[cfg(not(verus_keep_ghost))]
-fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Value>, String> {
+fn evaluate(req: &Request, git: &mut Value) -> Result<BTreeMap<String, Value>, String> {
     req.validate()?;
-    let (old, r, view) = chrono_judge_registration::views_with_reader(req, reader)?;
-    canonical(req, &r)?;
+    let views = registration::views(req, git)?;
+    let old = views.base;
+    let r = views.candidate;
+    let view = views.registration_view;
+    canonical(req, &r.config)?;
+    let methods = views.methods?;
+    if methods.contains_key("validate.delta") {
+        return Err("E_ROUTE_AMBIGUOUS: validate.delta".into());
+    }
     let env = serde_json::from_value(req.observations["environment"]["effective"].clone())
         .map_err(|e| e.to_string())?;
     let impact = impact::decode(
         &req.impact,
-        &r.config()["protocol"],
+        &r.config["protocol"],
         &env,
         |command, input| {
             let process = chrono_harness::run_process(&req.candidate.root, command, input)?;
@@ -792,59 +777,52 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
     if impact.schema != "chrono-filemap-impact/v6" || impact.delta != req.delta {
         return Err("E_IMPACT: identity".into());
     }
-    let selected = selection::global_selection(
-        &old,
-        &r,
-        &impact.tests,
-        &impact.retired_tests,
-        chrono_judge_registration::downstream_validator(&r, &req.judge_id),
-    )?;
-    let inputs = if matches!(
-        req.scope,
-        Some(chrono_harness::units::Scope::Collect { .. })
-    ) {
-        chrono_judge_registration::inputs::validate_collection(req, &old, &r, &selected)?
+    let selected = if impact.retired_tests.is_empty() {
+        impact.tests.into_iter().collect()
     } else {
-        chrono_judge_registration::inputs::validate(req, &old, &r)?
+        selection::choose(
+            &req.judge_id,
+            json!({"mode":"view","view":view,"config":req.config_path}),
+            Value::Null,
+            impact.tests,
+            impact.retired_tests,
+            |op, input| registration::query(&req.candidate.root, op, input),
+        )?
     };
-    let reused = chrono_judge_registration::reused_tools(&view)?;
-    // First prepare the global graph.  This validates every selected plan and
-    // its prerequisites even when the caller asks for one unit only.
-    let global_plans = chrono_judge_registration::execution::plans(r.filemap())?;
-    let methods = chrono_judge_registration::execution::methods(r.projects())?;
-    let (global_chosen, global_operations) =
-        order(&selected, &global_plans, &methods, &execute_actions(&r))?;
-    let old_outputs = facts::artifact_directories(old.config())?
+    let inputs = registration::effective_inputs(req, &view, &selected)?;
+    let reused = views.reused?;
+    let global_plans = views.plans?;
+    let actions = unique_actions(views.test_operations);
+    let (global_chosen, global_operations) = order(&selected, &global_plans, &methods, &actions)?;
+    let old_outputs = facts::artifact_directories(&old.config)?
         .into_iter()
         .map(str::to_owned)
         .collect();
-    let outputs = facts::artifact_directories(r.config())?
+    let outputs = facts::artifact_directories(&r.config)?
         .into_iter()
         .map(str::to_owned)
         .collect();
     source_plan::validate(
-        Some((&req.base.commit, old.filemap(), old.projects(), old_outputs)),
-        (&req.candidate.commit, r.filemap(), r.projects(), outputs),
+        Some((&req.base.commit, &old.filemap, &old.projects, old_outputs)),
+        (&req.candidate.commit, &r.filemap, &r.projects, outputs),
         &impact.reached,
         &methods,
         &global_operations,
         |previous, candidate, paths| {
-            chrono_harness::verified_verifier::sources::continuity::observe(
-                reader,
-                &req.candidate.root,
-                previous,
-                candidate,
-                paths,
-            )
+            use chrono_harness::verified_verifier::sources::continuity;
+            if paths.is_empty() {
+                return Ok(continuity::Continuity::empty());
+            }
+            let reader = facts::Reader::for_request(req)?;
+            let result =
+                continuity::observe(&reader, &req.candidate.root, previous, candidate, paths);
+            registration::append_source_facts(git, reader.observation())?;
+            result
         },
     )?;
     let global_selected = selected.clone();
     let selected = unit_selection(req, &selected, &global_plans)?;
-    let scheduling = chrono_judge_registration::execution::scheduling(
-        r.filemap(),
-        r.projects(),
-        &r.config()["artifacts"],
-    )?;
+    let scheduling = views.scheduling?;
     let plan = if matches!(
         req.scope,
         Some(chrono_harness::units::Scope::Collect { .. })
@@ -854,8 +832,8 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
             binding(req, &inputs),
             &selected,
             &global_plans,
-            &chrono_judge_registration::execution::methods(r.projects())?,
-            &execute_actions(&r),
+            &methods,
+            &actions,
             env,
         )?
         .with_scheduling(scheduling.clone())?
@@ -865,9 +843,9 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
             binding(req, &inputs),
             &selected,
             &global_plans,
-            &chrono_judge_registration::execution::methods(r.projects())?,
-            &execute_actions(&r),
-            &r.config()["tools"],
+            &methods,
+            &actions,
+            &r.config["tools"],
             env,
             &reused,
             scheduling,
@@ -876,7 +854,7 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
     };
     // Every launched tool is an explicitly retained external input or a registered candidate file.
     for tool in plan.tools.values() {
-        let registered = r.config()["environment"]["inputs"]
+        let registered = r.config["environment"]["inputs"]
             .as_array()
             .unwrap()
             .iter()
@@ -890,7 +868,7 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
                 .ok()
                 .and_then(|p| p.to_str())
                 .is_some_and(|p| {
-                    r.filemap()["files"]
+                    r.filemap["files"]
                         .as_array()
                         .unwrap()
                         .iter()
