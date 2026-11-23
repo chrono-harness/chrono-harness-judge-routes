@@ -8,23 +8,23 @@ use std::{
     process::{Command, Stdio},
 };
 
-/// An isolated host launches the route judge through a registered tool alias.
-/// Resolve its sibling in that explicit host directory when PATH was cleared.
+/// Keep the search path's order across independent tool installations. A host
+/// can also launch through explicit sibling aliases that it does not export.
 pub fn runner_program() -> std::path::PathBuf {
-    if std::env::var_os("PATH").is_none_or(|path| path.is_empty()) {
-        if let Some(directory) = std::env::args_os()
-            .next()
-            .as_deref()
-            .map(Path::new)
-            .and_then(Path::parent)
-            .filter(|parent| !parent.as_os_str().is_empty())
-        {
-            if let Ok(directory) = std::path::absolute(directory) {
-                return directory.join("chrono-harness");
-            }
-        }
+    let name = "chrono-harness";
+    if std::env::var_os("PATH").is_some_and(|path| {
+        std::env::split_paths(&path).any(|directory| directory.join(name).is_file())
+    }) {
+        return name.into();
     }
-    "chrono-harness".into()
+    let invoked = std::env::args_os().next().map(std::path::PathBuf::from);
+    let alias = invoked
+        .as_deref()
+        .and_then(Path::parent)
+        .filter(|directory| !directory.as_os_str().is_empty())
+        .and_then(|directory| std::path::absolute(directory).ok())
+        .map(|directory| directory.join(name));
+    alias.unwrap_or_else(|| name.into())
 }
 
 fn call(

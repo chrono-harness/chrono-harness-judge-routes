@@ -1143,29 +1143,35 @@ fn source_query_uses_the_host_alias_when_its_caller_clears_path() {
     let query = json!({"previous":null,"candidate":{"commit":commit,
         "filemap":{"files":[],"require_new_file_classification":true},
         "projects":{"projects":[]},"artifacts":[]},"affected":[],"methods":{},"operations":[],"git":null});
-    let mut child = Command::new(bin.join("chrono-judge-routes"))
-        .arg("source-plan-v1")
-        .current_dir(root.path())
-        .env_clear()
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(&serde_json::to_vec(&query).unwrap())
-        .unwrap();
-    let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    assert_eq!(
-        serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap(),
-        json!({"previous":null,"candidate":commit,"error":null,"git_facts":null})
-    );
+    for search in [None, Some("/usr/bin:/bin")] {
+        let mut command = Command::new(bin.join("chrono-judge-routes"));
+        command.env_clear();
+        if let Some(search) = search {
+            command.env("PATH", search);
+        }
+        let mut child = command
+            .arg("source-plan-v1")
+            .current_dir(root.path())
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .unwrap();
+        child
+            .stdin
+            .take()
+            .unwrap()
+            .write_all(&serde_json::to_vec(&query).unwrap())
+            .unwrap();
+        let output = child.wait_with_output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap(),
+            json!({"previous":null,"candidate":commit,"error":null,"git_facts":null})
+        );
+    }
 }
