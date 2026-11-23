@@ -1,5 +1,4 @@
 use chrono_harness::{CommandSpec, run_process_observed, sha256, wire};
-use chrono_judge_registration::execution::{Method, Plan};
 use chrono_judge_routes::{Receipt, compare, order, prepare};
 use serde_json::json;
 use std::{collections::BTreeMap, fs, os::unix::fs::symlink};
@@ -9,22 +8,17 @@ const TOOL: &str = env!("CARGO_BIN_EXE_chrono-judge-routes-test-tool");
 fn declarations() -> serde_json::Value {
     json!([{"id":"routes-helper","program":TOOL,"version_argv":["--version"],"expected_version":"chrono-judge-routes-test-tool 0.1.0"}])
 }
-fn method(id: &str, args: Vec<String>) -> Method {
-    Method {
-        owner: "script:p".into(),
-        operation: id.into(),
-        tool: "routes-helper".into(),
-        argv: args,
-        output_contract: None,
-    }
+fn method<T: serde::de::DeserializeOwned>(id: &str, args: Vec<String>) -> T {
+    serde_json::from_value(
+        json!({"owner":"script:p","operation":id,"tool":"routes-helper","argv":args}),
+    )
+    .unwrap()
 }
-fn p(ops: &[&str]) -> Plan {
-    Plan {
-        operations: ops.iter().map(|s| s.to_string()).collect(),
-        timeout_seconds: 10,
-        output_limit_bytes: 4096,
-        operation_bounds: BTreeMap::new(),
-    }
+fn plan<T: serde::de::DeserializeOwned>(operations: &[&str]) -> T {
+    serde_json::from_value(json!({
+        "operations":operations, "timeout_seconds":10, "output_limit_bytes":4096
+    }))
+    .unwrap()
 }
 
 // Supply the public receipt a project executor would send. File observation belongs to projects.
@@ -73,13 +67,10 @@ fn compiler_receipts_are_checked_offline_with_the_original_io_outcome() {
     .into_iter()
     .map(str::to_owned)
     .collect();
-    let mut compiler = method("compile-fixture", args);
-    compiler.output_contract = Some(chrono_harness::verified_verifier::OutputContract {
-        version: "fixture".into(),
-        commit: "fixture".into(),
-    });
-    let plans = BTreeMap::from([("test:compiler".into(), p(&["compile-fixture"]))]);
-    let methods = BTreeMap::from([("compile-fixture".into(), vec![compiler])]);
+    let mut compiler: serde_json::Value = method("compile-fixture", args);
+    compiler["output_contract"] = json!({"version":"fixture","commit":"fixture"});
+    let plans = BTreeMap::from([("test:compiler".into(), plan(&["compile-fixture"]))]);
+    let methods = serde_json::from_value(json!({"compile-fixture":[compiler]})).unwrap();
     let exec = BTreeMap::from([("test:compiler".into(), "compile-fixture".into())]);
     let plan = prepare(
         root,
@@ -148,8 +139,8 @@ fn compiler_receipts_are_checked_offline_with_the_original_io_outcome() {
 #[test]
 fn shared_prerequisites_order_and_dedup() {
     let plans = BTreeMap::from([
-        ("test:a".into(), p(&["shared", "a"])),
-        ("test:b".into(), p(&["shared", "a", "b"])),
+        ("test:a".into(), plan(&["shared", "a"])),
+        ("test:b".into(), plan(&["shared", "a", "b"])),
     ]);
     let methods = ["shared", "a", "b"]
         .into_iter()
@@ -166,7 +157,7 @@ fn shared_prerequisites_order_and_dedup() {
 }
 #[test]
 fn explicit_prerequisite_bounds_preserve_each_consumer_default_and_reject_disagreement() {
-    let mut plans: BTreeMap<String, Plan> = serde_json::from_value(json!({
+    let mut plans: BTreeMap<String, _> = serde_json::from_value(json!({
         "test:distribution": {"operations":["build", "distribution"],
             "timeout_seconds":600,"output_limit_bytes":1048576},
         "test:startup": {"operations":["build", "startup"],
@@ -242,42 +233,31 @@ fn explicit_prerequisite_bounds_preserve_each_consumer_default_and_reject_disagr
 
 #[test]
 fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
-    use chrono_judge_registration::execution::{Bounds, methods, plans, test_bindings};
-    let fixture: serde_json::Value =
+    let mut query: serde_json::Value =
         serde_json::from_str(include_str!("fixtures/shared-plans.json")).unwrap();
-    let filemap = &fixture["filemap"];
-    let projects = &fixture["projects"];
-    let mut plans = plans(filemap).unwrap();
-    // 为现役 Rust bootstrap 计划增加共享前置，核对每个原操作的限制仍保留。
-    let startup = plans.get_mut("test:host-bootstrap-native-tests").unwrap();
-    let startup_operations = startup.operations.clone();
-    assert!(startup_operations.contains(&"test.host-bootstrap-native-tests".into()));
-    assert!(startup.operation_bounds.is_empty());
-    startup.operations.insert(0, "build.cache".into());
-    startup.operation_bounds.insert(
-        "build.cache".into(),
-        Bounds {
-            timeout_seconds: 600,
-            output_limit_bytes: 1048576,
-        },
+    let startup = "test:host-bootstrap-native-tests";
+    let plans = &mut query["filemap"]["execution_plans"];
+    let original_operations: Vec<String> =
+        serde_json::from_value(plans[startup]["operations"].clone()).unwrap();
+    assert!(
+        original_operations
+            .iter()
+            .any(|op| op == "test.host-bootstrap-native-tests")
     );
-    let execute = test_bindings(projects)
+    assert!(plans[startup].get("operation_bounds").is_none());
+    plans[startup]["operations"]
+        .as_array_mut()
         .unwrap()
-        .into_iter()
-        .map(|(id, bindings)| {
-            assert_eq!(bindings.len(), 1);
-            (id, bindings[0].operation.clone())
-        })
-        .collect();
-    let selected = [
-        "test:host-bootstrap-native-tests",
-        "test:distribution-tests",
-        "test:host-release-native-tests",
-    ]
-    .into_iter()
-    .map(str::to_owned)
-    .collect();
-    let (_, operations) = order(&selected, &plans, &methods(projects).unwrap(), &execute).unwrap();
+        .insert(0, json!("build.cache"));
+    plans[startup]["operation_bounds"] = json!({"build.cache":{
+        "timeout_seconds":600, "output_limit_bytes":1048576
+    }});
+    let query_routes = |input: &serde_json::Value| {
+        chrono_judge_routes::plan_query::full_operations(input.to_string().as_bytes())
+    };
+    let result = query_routes(&query).unwrap();
+    let operations: Vec<chrono_judge_routes::Operation> =
+        serde_json::from_value(result["operations"].clone()).unwrap();
     assert_eq!(
         operations
             .iter()
@@ -291,7 +271,7 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
         ("test.host-release-native-tests", 600),
     ]
     .into_iter()
-    .chain(startup_operations.iter().map(|op| (op.as_str(), 900)))
+    .chain(original_operations.iter().map(|op| (op.as_str(), 900)))
     {
         let op = operations
             .iter()
@@ -300,27 +280,22 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
         assert_eq!(op.timeout_seconds, timeout, "{operation}");
         assert_eq!(op.output_limit_bytes, 1048576, "{operation}");
     }
-    assert_eq!(
-        plans["test:host-bootstrap-native-tests"].operations,
-        std::iter::once("build.cache".to_owned())
-            .chain(startup_operations)
-            .collect::<Vec<_>>()
-    );
-    assert_eq!(
-        plans["test:host-bootstrap-native-tests"].timeout_seconds,
-        900
-    );
+    let selected = &result["selected"];
+    let expected_operations: Vec<_> = std::iter::once("build.cache".to_owned())
+        .chain(original_operations)
+        .collect();
+    assert_eq!(selected[startup]["operations"], json!(expected_operations));
+    assert_eq!(selected[startup]["timeout_seconds"], 900);
     for test in ["test:distribution-tests", "test:host-release-native-tests"] {
-        assert_eq!(plans[test].timeout_seconds, 600);
-        assert!(plans[test].operation_bounds.is_empty());
+        assert_eq!(selected[test]["timeout_seconds"], 600);
+        assert!(selected[test].get("operation_bounds").is_none());
     }
-    plans
-        .get_mut("test:host-bootstrap-native-tests")
+    query["filemap"]["execution_plans"][startup]
+        .as_object_mut()
         .unwrap()
-        .operation_bounds
-        .clear();
+        .remove("operation_bounds");
     assert!(
-        order(&selected, &plans, &methods(&projects).unwrap(), &execute)
+        query_routes(&query)
             .unwrap_err()
             .contains("E_PLAN_BOUNDS: inconsistent shared operation build.cache")
     );
@@ -328,8 +303,8 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
 #[test]
 fn conflicts_missing_duplicate_methods_and_inconsistent_bounds_preflight() {
     let mut plans = BTreeMap::from([
-        ("test:a".into(), p(&["a", "b"])),
-        ("test:b".into(), p(&["b", "a"])),
+        ("test:a".into(), plan(&["a", "b"])),
+        ("test:b".into(), plan(&["b", "a"])),
     ]);
     let mut methods: BTreeMap<_, _> = ["a", "b"]
         .into_iter()
@@ -387,7 +362,7 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
         "line\nnext".into(),
     ];
     let methods = BTreeMap::from([("test".into(), vec![method("test", args.clone())])]);
-    let plans = BTreeMap::from([("test:t".into(), p(&["test"]))]);
+    let plans = BTreeMap::from([("test:t".into(), plan(&["test"]))]);
     let exec = BTreeMap::from([("test:t".into(), "test".into())]);
     let plan = prepare(
         dir.path(),
@@ -527,7 +502,7 @@ fn tool_wrong_version_and_replacement_before_launch_fail() {
         "test".into(),
         vec![method("test", vec!["--version".into()])],
     )]);
-    let plans = BTreeMap::from([("test:t".into(), p(&["test"]))]);
+    let plans = BTreeMap::from([("test:t".into(), plan(&["test"]))]);
     let exec = BTreeMap::from([("test:t".into(), "test".into())]);
     assert!(
         prepare(
@@ -583,7 +558,7 @@ fn path_shadow_cannot_replace_bound_invocation_and_bytes_are_rechecked() {
     let mut tools = source;
     tools[0]["program"] = json!("routes-helper");
     let methods = BTreeMap::from([("test".into(), vec![method("test", vec!["bound".into()])])]);
-    let plans = BTreeMap::from([("test:t".into(), p(&["test"]))]);
+    let plans = BTreeMap::from([("test:t".into(), plan(&["test"]))]);
     let exec = BTreeMap::from([("test:t".into(), "test".into())]);
     let env = BTreeMap::from([("PATH".into(), a.to_str().unwrap().into())]);
     let plan = prepare(
@@ -685,8 +660,8 @@ fn reused_tool_observation_avoids_second_version_launch_and_cycle_launches_nothi
         .map(|id| (id.into(), vec![method(id, vec!["--version".into()])]))
         .collect();
     let mut plans = BTreeMap::from([
-        ("test:a".into(), p(&["a", "b"])),
-        ("test:b".into(), p(&["b"])),
+        ("test:a".into(), plan(&["a", "b"])),
+        ("test:b".into(), plan(&["b"])),
     ]);
     let actions = BTreeMap::from([("test:a".into(), "a".into()), ("test:b".into(), "b".into())]);
     let selected = plans.keys().cloned().collect();
@@ -756,7 +731,7 @@ fn reused_tool_observation_avoids_second_version_launch_and_cycle_launches_nothi
 #[test]
 fn scheduling_binds_identity_and_collection_reconstructs_without_processes() {
     let d = tempfile::tempdir().unwrap();
-    let plans = BTreeMap::from([("test:t".into(), p(&["run"]))]);
+    let plans = BTreeMap::from([("test:t".into(), plan(&["run"]))]);
     let methods = BTreeMap::from([("run".into(), vec![method("run", vec!["literal".into()])])]);
     let actions = BTreeMap::from([("test:t".into(), "run".into())]);
     let legacy = chrono_judge_routes::prepare_collection(
@@ -864,8 +839,8 @@ fn unit_declarations_bind_only_owned_methods_to_the_original_candidate() {
 fn scoped_graph_expands_only_when_bound_and_rejects_a_missing_action() {
     use chrono_judge_routes::plan_query::scoped_operations;
     let mut query = json!({"graph":{
-        "selected":["test:a"], "plans":{"test:a":p(&["first","last"])},
-        "methods":{"first":[method("first",vec![])],"last":[method("last",vec!["{candidate}".into()])]},
+        "selected":["test:a"], "plans":{"test:a":plan::<serde_json::Value>(&["first","last"])},
+        "methods":{"first":[method::<serde_json::Value>("first",vec![])],"last":[method::<serde_json::Value>("last",vec!["{candidate}".into()])]},
         "execute":{"test:a":"last"}
     }});
     let read = |query: &serde_json::Value| scoped_operations(query.to_string().as_bytes());
@@ -890,8 +865,8 @@ fn scoped_graph_expands_only_when_bound_and_rejects_a_missing_action() {
 fn scoped_preparation_binds_the_actual_tool_version_and_keeps_its_observation() {
     let host = tempfile::tempdir().unwrap();
     let mut query = json!({
-        "graph":{"selected":["test:a"],"plans":{"test:a":p(&["build"])},
-                 "methods":{"build":[method("build",vec!["{candidate}".into()])]},
+        "graph":{"selected":["test:a"],"plans":{"test:a":plan::<serde_json::Value>(&["build"])},
+                 "methods":{"build":[method::<serde_json::Value>("build",vec!["{candidate}".into()])]},
                  "execute":{"test:a":"build"}},
         "binding":{"candidate":"fixed"}, "declarations":declarations(),
         "environment":{}, "reused":{}, "scheduling":null,
@@ -916,7 +891,7 @@ fn full_scheduling_validates_even_unselected_assignments_and_collection_replays_
     let mut query = json!({
         "selected":["test:a"],
         "filemap":{"execution_plans":{
-            "test:a":p(&["run.a"]), "test:b":p(&["run.b"])
+            "test:a":plan::<serde_json::Value>(&["run.a"]), "test:b":plan::<serde_json::Value>(&["run.b"])
         }},
         "projects":{"projects":[], "scripts":[
             {"id":"a","actions":{"execute":{"operation":"run.a","tool":"a","argv":["{candidate}"]}}},
