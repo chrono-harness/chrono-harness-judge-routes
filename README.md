@@ -22,5 +22,4 @@ projects 在宿主选定的 routes 发行上使用以下查询。每个查询从
 
 - `check-plan-v1` 校验原始计划的身份、操作顺序、资源声明和执行限制，返回 `plan` 身份。
 - `unit-declarations-v1` 接收原始 `request`、`effective_inputs`、两组登记 `filemap` 和 `projects`、每个测试的 `test_operations`、全局选择 `global` 和其中一个执行单元的选择 `unit`。返回请求身份、绑定、全局操作图及该单元展开后的操作。
-- `record-operation-v1` 在原执行目录读取 `plan`、操作名 `operation` 和实际执行的 `process`。有编译合同的操作从声明路径观察产物及其依赖文件。返回回执的附加字段和核对错误 `error`。执行方保留原进程的输出、退出码和失败信息，并将原进程与附加字段合为完整回执。
 - `retained-tool-v1` 核对采集时的 `tool`、`program`、`version_argv`、`environment`、`root` 及 `expected_version`，成功返回工具的 `sha256`。收集端可在原执行目录和工具已经清除后核对此凭证。

@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Read,
-    path::{Path, PathBuf},
+    path::PathBuf,
 };
 
 /// Compare the supplied original receipts against a single validated plan, in plan order.
@@ -110,35 +110,6 @@ pub fn unit_declarations(input: impl Read) -> Result<Value, String> {
         "global_graph":{"schema":"chrono-global-operation-graph/v1","selected":chosen,"operations":ordered},
         "selected":selected,"operations":operations,
     }))
-}
-
-/// The executor retains the original process. Return only the new receipt fields.
-pub fn record_operation(root: &Path, input: impl Read) -> Result<Value, String> {
-    #[derive(Deserialize)]
-    #[serde(deny_unknown_fields)]
-    struct Query {
-        plan: Execution,
-        operation: String,
-        process: chrono_harness::ProcessResult,
-    }
-    let q: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;
-    q.plan.validate()?;
-    if q.plan.root != root.canonicalize().map_err(|e| e.to_string())? {
-        return Err("E_PLAN_IDENTITY: receipt checkout differs".into());
-    }
-    let op = q
-        .plan
-        .operations
-        .iter()
-        .find(|op| op.method.operation == q.operation)
-        .ok_or("E_ROUTE_MISSING: operation absent from plan")?;
-    let receipt = Receipt::new(&q.plan, op, q.process)?;
-    let error = compare_validated(&q.plan, op, Some(&receipt)).err();
-    Ok(
-        json!({"plan":receipt.plan,"operation":receipt.operation,"method":receipt.method,
-        "compiler_dependency":receipt.compiler_dependency,"compiler_artifact":receipt.compiler_artifact,
-        "digest":receipt.digest,"error":error}),
-    )
 }
 
 /// Check a retained tool against its original declaration without observing a live tool.
