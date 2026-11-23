@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Read,
-    path::PathBuf,
+    path::{Path, PathBuf},
 };
 
 /// Compare the supplied original receipts against a single validated plan, in plan order.
@@ -77,4 +77,96 @@ pub fn collection_plan(input: impl Read) -> Result<Value, String> {
         q.environment,
     )?;
     serde_json::to_value(plan).map_err(|e| e.to_string())
+}
+
+/// Rebuild the global operation graph and a unit's expanded operations at its original coordinates.
+pub fn unit_declarations(input: impl Read) -> Result<Value, String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Query {
+        request: Request,
+        effective_inputs: Value,
+        filemap: Value,
+        projects: Value,
+        test_operations: BTreeMap<String, Vec<String>>,
+        global: BTreeSet<String>,
+        unit: BTreeSet<String>,
+    }
+    let q: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;
+    if !q.unit.is_subset(&q.global) {
+        return Err("E_UNIT_ASSIGNMENT: unit selection exceeds global selection".into());
+    }
+    let binding = crate::binding(&q.request, &q.effective_inputs);
+    let plans = execution::plans(&q.filemap)?;
+    let methods = execution::methods(&q.projects)?;
+    let actions = unique_actions(q.test_operations);
+    let (chosen, ordered) = crate::order(&q.global, &plans, &methods, &actions)?;
+    let (selected, mut operations) = crate::order(&q.unit, &plans, &methods, &actions)?;
+    for operation in &mut operations {
+        operation.method.argv = crate::expand(&operation.method.argv, &binding);
+    }
+    Ok(json!({
+        "request_id":q.request.request_id, "binding":binding,
+        "global_graph":{"schema":"chrono-global-operation-graph/v1","selected":chosen,"operations":ordered},
+        "selected":selected,"operations":operations,
+    }))
+}
+
+/// The executor retains the original process. Return only the new receipt fields.
+pub fn record_operation(root: &Path, input: impl Read) -> Result<Value, String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Query {
+        plan: Execution,
+        operation: String,
+        process: chrono_harness::ProcessResult,
+    }
+    let q: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;
+    q.plan.validate()?;
+    if q.plan.root != root.canonicalize().map_err(|e| e.to_string())? {
+        return Err("E_PLAN_IDENTITY: receipt checkout differs".into());
+    }
+    let op = q
+        .plan
+        .operations
+        .iter()
+        .find(|op| op.method.operation == q.operation)
+        .ok_or("E_ROUTE_MISSING: operation absent from plan")?;
+    let receipt = Receipt::new(&q.plan, op, q.process)?;
+    let error = compare_validated(&q.plan, op, Some(&receipt)).err();
+    Ok(
+        json!({"plan":receipt.plan,"operation":receipt.operation,"method":receipt.method,
+        "compiler_dependency":receipt.compiler_dependency,"compiler_artifact":receipt.compiler_artifact,
+        "digest":receipt.digest,"error":error}),
+    )
+}
+
+/// Check a retained tool against its original declaration without observing a live tool.
+pub fn retained_tool(input: impl Read) -> Result<Value, String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Query {
+        tool: chrono_harness::observation::Tool,
+        program: String,
+        version_argv: Vec<String>,
+        environment: BTreeMap<String, String>,
+        root: PathBuf,
+        expected_version: Option<String>,
+    }
+    let q: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;
+    crate::validate_retained_tool(
+        &q.tool,
+        &q.program,
+        &q.version_argv,
+        &q.environment,
+        &q.root,
+        q.expected_version.as_deref(),
+    )?;
+    Ok(json!({"sha256":q.tool.sha256}))
+}
+
+pub fn check_plan(input: impl Read) -> Result<Value, String> {
+    let plan: Execution = serde_json::from_reader(input).map_err(|e| e.to_string())?;
+    plan.validate()?;
+    Ok(json!({"plan":plan.identity}))
 }

@@ -103,6 +103,42 @@ fn compiler_receipt_observes_original_library_and_preserves_io_failure() {
     assert_eq!(artifact.path, b"library out.rlib");
     assert_eq!(artifact.sha256, sha256(&content).as_bytes());
     assert_eq!(artifact.length, content.len() as u64);
+    let query = json!({"plan":plan,"operation":op.method.operation,"process":original.process});
+    let record = |dir: &std::path::Path, input: &serde_json::Value| {
+        chrono_judge_routes::plan_query::record_operation(dir, input.to_string().as_bytes())
+    };
+    let mut published = record(root, &query).unwrap();
+    assert!(
+        published
+            .as_object_mut()
+            .unwrap()
+            .remove("error")
+            .unwrap()
+            .is_null()
+    );
+    assert!(published.get("process").is_none());
+    published["process"] = query["process"].clone();
+    assert_eq!(published, json!(original));
+    assert!(
+        record(root.parent().unwrap(), &query)
+            .unwrap_err()
+            .contains("checkout differs")
+    );
+    let mut wrong_plan = query.clone();
+    wrong_plan["plan"]["identity"] = json!("other");
+    assert_eq!(record(root, &wrong_plan).unwrap_err(), "E_PLAN_IDENTITY");
+    let mut wrong_operation = query.clone();
+    wrong_operation["operation"] = json!("absent");
+    assert!(
+        record(root, &wrong_operation)
+            .unwrap_err()
+            .contains("absent from plan")
+    );
+    let mut failed = query.clone();
+    failed["process"]["exit_code"] = json!(9);
+    let observed = record(root, &failed).unwrap();
+    assert!(observed["compiler_dependency"]["Err"].is_string());
+    assert!(observed["error"].is_string());
     let encoded = serde_json::to_vec(&original).unwrap();
     assert!(encoded.len() < content.len());
     let retained: Receipt = serde_json::from_slice(&encoded).unwrap();
@@ -430,6 +466,17 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
     };
     let wire_plan = serde_json::to_value(&plan).unwrap();
     let name = &op.method.operation;
+    let checked =
+        chrono_judge_routes::plan_query::check_plan(wire_plan.to_string().as_bytes()).unwrap();
+    assert_eq!(checked["plan"], plan.identity);
+    let mut retained = json!({"tool":tool,"program":TOOL,"version_argv":["--version"],
+        "environment":plan.environment,"root":plan.root,"expected_version":"chrono-judge-routes-test-tool 0.1.0"});
+    let verify = |q: &serde_json::Value| {
+        chrono_judge_routes::plan_query::retained_tool(q.to_string().as_bytes())
+    };
+    assert_eq!(verify(&retained).unwrap()["sha256"], tool.sha256);
+    retained["root"] = json!("/another-host");
+    assert!(verify(&retained).unwrap_err().contains("E_TOOL_BINDING"));
     let observed = evidence(&wire_plan, json!({ (name):receipt})).unwrap();
     assert_eq!(observed["plan"], plan.identity);
     assert_eq!(
@@ -799,4 +846,53 @@ fn collection_query_replays_only_the_unique_registered_terminal_operation() {
     plan.validate().unwrap();
     query["test_operations"]["test:example"] = json!(["run.example", "run.other"]);
     assert!(replay(&query).is_err());
+}
+
+#[test]
+fn unit_declarations_bind_only_owned_methods_to_the_original_candidate() {
+    let end = json!({"commit":"candidate","tree":"tree","root":"/original"});
+    let mut q = json!({
+        "request":{"request_id":"fixed","protocol":"v1","judge_id":"routes","mode":"delta","base":end,
+            "candidate":end,"delta":[],"registries":{"base":"/old","candidate":"/new","digest":"reg"},
+            "context":{"path":"ctx","sha256":"ctx"},"impact":null,"prior_results":[],"config_path":"cfg",
+            "checkout":{"head":"candidate","tracked":[],"untracked":[],"index_flags":[]},
+            "runner":{"path":"runner","sha256":"runner","version":"1"}},
+        "effective_inputs":{"id":"inputs"},
+        "filemap":{"execution_plans":{}}, "projects":{"projects":[],"scripts":[]},
+        "test_operations":{},"global":["test:a","test:b"],"unit":["test:b"]
+    });
+    for id in ["a", "b"] {
+        let test = format!("test:{id}");
+        q["filemap"]["execution_plans"][&test] =
+            json!({"operations":[id],"timeout_seconds":9,"output_limit_bytes":128});
+        q["test_operations"][&test] = json!([id]);
+        q["projects"]["scripts"]
+            .as_array_mut()
+            .unwrap()
+            .push(json!({"id":id,
+            "actions":{"execute":{"operation":id,"tool":"example","argv":["{candidate}"]}}}));
+    }
+    let read = |q: &serde_json::Value| {
+        chrono_judge_routes::plan_query::unit_declarations(q.to_string().as_bytes())
+    };
+    let declarations = read(&q).unwrap();
+    assert_eq!(
+        declarations["global_graph"]["operations"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(
+        declarations["global_graph"]["operations"][1]["method"]["argv"],
+        json!(["{candidate}"])
+    );
+    assert_eq!(declarations["operations"].as_array().unwrap().len(), 1);
+    assert_eq!(declarations["operations"][0]["method"]["operation"], "b");
+    assert_eq!(
+        declarations["operations"][0]["method"]["argv"],
+        json!(["candidate"])
+    );
+    q["global"] = json!(["test:a"]);
+    assert!(read(&q).unwrap_err().contains("E_UNIT_ASSIGNMENT"));
 }
