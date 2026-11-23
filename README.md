@@ -28,3 +28,5 @@ projects 在宿主选定的 routes 发行上使用以下查询。每个查询从
 
 - 调度和收集从标准输入向 `scoped-operations-v1` 提交 `{graph, binding}`。省略 binding 时返回原始参数模板，提供 binding 时展开每个操作的参数。输出包含选中的计划和依赖排序后的操作。
 - 执行前，调用方在宿主根目录运行 `prepare-scoped-plan-v1`，提供 `graph`、`binding`、`declarations`、`environment`、`reused` 和可选的 `scheduling`。routes 校验方法、限制和调度声明，获取缺少的工具版本观察，输出有身份绑定的完整计划。两个命令成功时向 stdout 写 JSON 并退出 0，失败时向 stderr 写原因并退出 2。
+
+完整 CI 在调度与收集时向 `full-operations-v1` 提交已解释的 `filemap`、`projects`、按测试名索引的终结操作声明 `test_operations` 和本次选择 `selected`。调度时额外传入 `execution_units`，routes 先验证所有测试和共享操作的单元归属，再返回 `required_units`。收集时省略该字段，返回的 `required_units` 为 null。两种调用都返回选中的计划、按依赖排序的操作及供证明核对使用的完整方法声明。命令从 stdin 读 JSON，成功向 stdout 写 JSON，拒绝输入时向 stderr 写原因并退出 2。

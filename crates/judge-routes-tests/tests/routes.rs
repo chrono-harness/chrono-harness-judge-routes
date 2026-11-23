@@ -910,3 +910,42 @@ fn scoped_preparation_binds_the_actual_tool_version_and_keeps_its_observation() 
     query["declarations"][0]["expected_version"] = json!("different tool version");
     assert!(prepare(&query).is_err());
 }
+
+#[test]
+fn full_scheduling_validates_even_unselected_assignments_and_collection_replays_the_order() {
+    let mut query = json!({
+        "selected":["test:a"],
+        "filemap":{"execution_plans":{
+            "test:a":p(&["run.a"]), "test:b":p(&["run.b"])
+        }},
+        "projects":{"projects":[], "scripts":[
+            {"id":"a","actions":{"execute":{"operation":"run.a","tool":"a","argv":["{candidate}"]}}},
+            {"id":"b","actions":{"execute":{"operation":"run.b","tool":"b","argv":[]}}}
+        ]},
+        "test_operations":{"test:a":["run.a"],"test:b":["run.b"]},
+        "execution_units":{"units":{
+            "alpha":{"tests":["test:a"],"report_path":"alpha.json"},
+            "beta":{"tests":["test:b"],"report_path":"beta.json"}
+        },"shared_operations":{}}
+    });
+    let read = |input: &serde_json::Value| {
+        chrono_judge_routes::plan_query::full_operations(input.to_string().as_bytes())
+    };
+    let scheduled = read(&query).unwrap();
+    assert_eq!(scheduled["required_units"], json!(["alpha"]));
+    assert_eq!(
+        scheduled["operations"][0]["method"]["argv"],
+        json!(["{candidate}"])
+    );
+    assert_eq!(scheduled["methods"]["run.b"][0]["owner"], "script:b");
+    query["execution_units"]["units"]["beta"]["tests"] = json!(["test:missing"]);
+    assert!(read(&query).unwrap_err().contains("E_UNIT_ASSIGNMENT"));
+    query.as_object_mut().unwrap().remove("execution_units");
+    let collected = read(&query).unwrap();
+    assert_eq!(collected["required_units"], serde_json::Value::Null);
+    for field in ["selected", "operations", "methods"] {
+        assert_eq!(collected[field], scheduled[field]);
+    }
+    query["test_operations"]["test:a"] = json!(["run.a", "run.b"]);
+    assert!(read(&query).unwrap_err().contains("E_ROUTE_MISSING"));
+}
