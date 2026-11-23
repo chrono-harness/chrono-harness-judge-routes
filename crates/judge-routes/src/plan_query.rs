@@ -141,3 +141,66 @@ pub fn check_plan(input: impl Read) -> Result<Value, String> {
     plan.validate()?;
     Ok(json!({"plan":plan.identity}))
 }
+
+/// Scoped CI can order the same declarations for scheduling and replay them
+/// for a particular request without probing an executable during collection.
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ScopedGraph {
+    selected: BTreeSet<String>,
+    plans: BTreeMap<String, execution::Plan>,
+    methods: BTreeMap<String, Vec<execution::Method>>,
+    execute: BTreeMap<String, String>,
+}
+
+pub fn scoped_operations(input: impl Read) -> Result<Value, String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Query {
+        graph: ScopedGraph,
+        binding: Option<Value>,
+    }
+    let q: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;
+    let graph = q.graph;
+    let (selected, mut operations) = crate::order(
+        &graph.selected,
+        &graph.plans,
+        &graph.methods,
+        &graph.execute,
+    )?;
+    if let Some(binding) = q.binding {
+        for op in &mut operations {
+            op.method.argv = crate::expand(&op.method.argv, &binding);
+        }
+    }
+    Ok(json!({"selected": selected, "operations": operations}))
+}
+
+pub fn prepare_scoped_plan(root: &std::path::Path, input: impl Read) -> Result<Value, String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Query {
+        graph: ScopedGraph,
+        binding: Value,
+        declarations: Value,
+        environment: BTreeMap<String, String>,
+        reused: BTreeMap<String, chrono_harness::observation::Tool>,
+        scheduling: Option<execution::Scheduling>,
+    }
+    let q: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;
+    let graph = q.graph;
+    let plan = crate::prepare_scheduled(
+        root,
+        q.binding,
+        &graph.selected,
+        &graph.plans,
+        &graph.methods,
+        &graph.execute,
+        &q.declarations,
+        q.environment,
+        &q.reused,
+        q.scheduling,
+        false,
+    )?;
+    serde_json::to_value(plan).map_err(|e| e.to_string())
+}
