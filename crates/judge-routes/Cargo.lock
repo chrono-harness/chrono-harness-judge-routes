@@ -98,6 +98,7 @@ dependencies = [
  "chrono-judge-registration",
  "serde",
  "serde_json",
+ "verus_builtin_macros",
 ]
 
 [[package]]
