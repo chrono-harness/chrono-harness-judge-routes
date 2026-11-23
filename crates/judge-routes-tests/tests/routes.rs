@@ -859,3 +859,54 @@ fn unit_declarations_bind_only_owned_methods_to_the_original_candidate() {
     q["global"] = json!(["test:a"]);
     assert!(read(&q).unwrap_err().contains("E_UNIT_ASSIGNMENT"));
 }
+
+#[test]
+fn scoped_graph_expands_only_when_bound_and_rejects_a_missing_action() {
+    use chrono_judge_routes::plan_query::scoped_operations;
+    let mut query = json!({"graph":{
+        "selected":["test:a"], "plans":{"test:a":p(&["first","last"])},
+        "methods":{"first":[method("first",vec![])],"last":[method("last",vec!["{candidate}".into()])]},
+        "execute":{"test:a":"last"}
+    }});
+    let read = |query: &serde_json::Value| scoped_operations(query.to_string().as_bytes());
+    let raw = read(&query).unwrap();
+    assert_eq!(raw["selected"], query["graph"]["plans"]);
+    assert_eq!(raw["operations"][1]["predecessors"], json!(["first"]));
+    assert_eq!(
+        raw["operations"][1]["method"]["argv"],
+        json!(["{candidate}"])
+    );
+    query["binding"] = json!({"candidate":"selected-revision"});
+    let bound = read(&query).unwrap();
+    assert_eq!(
+        bound["operations"][1]["method"]["argv"],
+        json!(["selected-revision"])
+    );
+    query["graph"]["execute"] = json!({});
+    assert!(read(&query).unwrap_err().contains("E_ROUTE_MISSING"));
+}
+
+#[test]
+fn scoped_preparation_binds_the_actual_tool_version_and_keeps_its_observation() {
+    let host = tempfile::tempdir().unwrap();
+    let mut query = json!({
+        "graph":{"selected":["test:a"],"plans":{"test:a":p(&["build"])},
+                 "methods":{"build":[method("build",vec!["{candidate}".into()])]},
+                 "execute":{"test:a":"build"}},
+        "binding":{"candidate":"fixed"}, "declarations":declarations(),
+        "environment":{}, "reused":{}, "scheduling":null,
+    });
+    let prepare = |query: &serde_json::Value| {
+        chrono_judge_routes::plan_query::prepare_scoped_plan(
+            host.path(),
+            query.to_string().as_bytes(),
+        )
+    };
+    let first = prepare(&query).unwrap();
+    assert_eq!(first["operations"][0]["method"]["argv"], json!(["fixed"]));
+    assert_eq!(first["tools"]["routes-helper"]["version"]["exit_code"], 0);
+    query["reused"] = first["tools"].clone();
+    assert_eq!(prepare(&query).unwrap(), first);
+    query["declarations"][0]["expected_version"] = json!("different tool version");
+    assert!(prepare(&query).is_err());
+}

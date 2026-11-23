@@ -23,3 +23,8 @@ projects 在宿主选定的 routes 发行上使用以下查询。每个查询从
 - `check-plan-v1` 校验原始计划的身份、操作顺序、资源声明和执行限制，返回 `plan` 身份。
 - `unit-declarations-v1` 接收原始 `request`、`effective_inputs`、两组登记 `filemap` 和 `projects`、每个测试的 `test_operations`、全局选择 `global` 和其中一个执行单元的选择 `unit`。返回请求身份、绑定、全局操作图及该单元展开后的操作。
 - `retained-tool-v1` 核对采集时的 `tool`、`program`、`version_argv`、`environment`、`root` 及 `expected_version`，成功返回工具的 `sha256`。收集端可在原执行目录和工具已经清除后核对此凭证。
+
+限定范围的 CI 把已选测试和本仓登记的计划、方法及执行动作放在 `graph` 对象的 `selected`、`plans`、`methods`、`execute` 字段中。
+
+- 调度和收集从标准输入向 `scoped-operations-v1` 提交 `{graph, binding}`。省略 binding 时返回原始参数模板，提供 binding 时展开每个操作的参数。输出包含选中的计划和依赖排序后的操作。
+- 执行前，调用方在宿主根目录运行 `prepare-scoped-plan-v1`，提供 `graph`、`binding`、`declarations`、`environment`、`reused` 和可选的 `scheduling`。routes 校验方法、限制和调度声明，获取缺少的工具版本观察，输出有身份绑定的完整计划。两个命令成功时向 stdout 写 JSON 并退出 0，失败时向 stderr 写原因并退出 2。
