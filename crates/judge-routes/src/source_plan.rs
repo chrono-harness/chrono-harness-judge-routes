@@ -5,6 +5,12 @@ use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, io::Read, path::Path};
 
+impl crate::verified_source_pipeline::InventoryPath for sources::SourceFile {
+    fn path(&self) -> &str {
+        &self.path
+    }
+}
+
 pub(super) type EndpointData<'a> = (&'a str, &'a Value, &'a Value, Vec<String>);
 
 pub(super) fn validate<'a>(
@@ -26,7 +32,11 @@ pub(super) fn validate<'a>(
         .map_err(|error| error.to_string());
     let registry: sources::SourceRegistry =
         serde_json::from_value(current.1.clone()).map_err(|error| error.to_string())?;
-    let paths = sources::continuity_paths(&registry.files, affected);
+    let paths = crate::verified_source_pipeline::continuity_paths(
+        &registry.files.entries,
+        registry.files.require_new_file_classification,
+        affected,
+    );
     crate::verified_source_pipeline::with_source_continuity(
         (),
         previous,

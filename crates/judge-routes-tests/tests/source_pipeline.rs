@@ -13,6 +13,52 @@ fn expect_continuity_bool(actual: bool)
     requires actual,
 { if !actual { panic!(); } }
 
+struct InventoryRow { path: String }
+
+impl policy::InventoryPath for InventoryRow {
+    closed spec fn path_view(&self) -> Seq<char> { self.path@ }
+    fn path(&self) -> (out: &str) { self.path.as_str() }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn path_selection_keeps_inventory_order_and_repetitions() {
+    let rows = vec![
+        InventoryRow { path: "b".to_string() }, InventoryRow { path: "x".to_string() },
+        InventoryRow { path: "a".to_string() }, InventoryRow { path: "b".to_string() },
+    ];
+    let nodes = vec!["file:a".to_string(), "project:x".to_string(), "file:b".to_string()];
+    proof {
+        reveal_strlit("file:"); reveal_strlit("file:a"); reveal_strlit("file:b");
+        reveal_strlit("file:x"); reveal_strlit("project:x"); reveal_strlit("a"); reveal_strlit("b"); reveal_strlit("x");
+        assert("file:a"@ =~= "file:"@ + "a"@);
+        assert("file:b"@ =~= "file:"@ + "b"@);
+        assert("file:x"@ =~= "file:"@ + "x"@);
+        assert("file:a"@[5] != "file:x"@[5]);
+        assert("file:b"@[5] != "file:x"@[5]);
+        assert("project:x"@.len() != "file:x"@.len());
+        assert forall|j: int| 0 <= j < nodes.len() implies (#[trigger] nodes[j])@ != "file:x"@ by {
+            if j == 0 {} else if j == 1 {} else { assert(j == 2); }
+        }
+        assert(nodes[0]@ == "file:"@ + "a"@);
+        assert(nodes[2]@ == "file:"@ + "b"@);
+        assert(exists|j: int| 0 <= j < nodes.len() && (#[trigger] nodes[j])@ == "file:"@ + "a"@);
+        assert(exists|j: int| 0 <= j < nodes.len() && (#[trigger] nodes[j])@ == "file:"@ + "b"@);
+        reveal_with_fuel(policy::selected, 6);
+        assert(policy::selected(rows@, nodes@, 1) =~= seq!["b"@]);
+        assert(policy::selected(rows@, nodes@, 2) =~= seq!["b"@]);
+        assert(policy::selected(rows@, nodes@, 3) =~= seq!["b"@, "a"@]);
+        assert(policy::selected(rows@, nodes@, 4) =~= seq!["b"@, "a"@, "b"@]);
+    }
+    let chosen = policy::continuity_paths(&rows, Some(true), &nodes);
+    expect_continuity_bool(chosen.len() == 3);
+    expect_continuity_bool(<&str>::exec_eq(chosen[0].as_str(), "b"));
+    expect_continuity_bool(<&str>::exec_eq(chosen[1].as_str(), "a"));
+    expect_continuity_bool(<&str>::exec_eq(chosen[2].as_str(), "b"));
+    let disabled = policy::continuity_paths(&rows, Some(false), &nodes);
+    let absent = policy::continuity_paths(&rows, None, &nodes);
+    expect_continuity_bool(disabled.is_empty() && absent.is_empty());
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn continuity_pipeline_preserves_both_endpoints_paths_and_observed_evidence() {
     let (trace, result) = policy::with_source_continuity(
