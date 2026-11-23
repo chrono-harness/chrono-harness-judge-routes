@@ -1,5 +1,5 @@
 //! Read and replay route evidence without executing operations or acquiring tools.
-use crate::{Execution, Receipt, compare_validated, unique_actions};
+use crate::{Execution, Method, Receipt, compare_validated, unique_actions};
 use chrono_harness::wire::Request;
 use chrono_judge_registration::execution;
 use serde::Deserialize;
@@ -67,7 +67,7 @@ struct Collection {
 #[derive(Deserialize)]
 struct Declarations {
     plans: BTreeMap<String, execution::Plan>,
-    methods: Result<BTreeMap<String, Vec<execution::Method>>, String>,
+    methods: Result<BTreeMap<String, Vec<Method>>, String>,
 }
 
 fn declarations(
@@ -269,7 +269,7 @@ pub fn check_scoped_plan(input: impl Read) -> Result<Value, String> {
 struct ScopedGraph {
     selected: BTreeSet<String>,
     plans: BTreeMap<String, execution::Plan>,
-    methods: BTreeMap<String, Vec<execution::Method>>,
+    methods: BTreeMap<String, Vec<Method>>,
     execute: BTreeMap<String, String>,
 }
 

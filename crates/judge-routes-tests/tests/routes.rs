@@ -895,8 +895,21 @@ fn scoped_graph_expands_only_when_bound_and_rejects_a_missing_action() {
         bound["operations"][1]["method"]["argv"],
         json!(["selected-revision"])
     );
+    let mut malformed = query.clone();
+    malformed["graph"]["methods"]["first"][0]["unknown"] = json!(1);
+    assert!(
+        read(&malformed)
+            .unwrap_err()
+            .contains("unknown field `unknown`")
+    );
     query["graph"]["execute"] = json!({});
     assert!(read(&query).unwrap_err().contains("E_ROUTE_MISSING"));
+    query["graph"]["plans"]["test:a"]["operation_bounds"] =
+        json!({"first":{"timeout_seconds":0,"output_limit_bytes":4096}});
+    assert_eq!(
+        read(&query).unwrap_err(),
+        "E_EXECUTION_PLAN: invalid operations or bounds: test:a"
+    );
 }
 
 #[test]
