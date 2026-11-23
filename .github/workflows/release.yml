@@ -39,6 +39,11 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - uses: jdx/mise-action@924e7c586e33d7d4bae9c14e26c5d22e2beb6e78
+        with:
+          version: 2026.11.12
+          cache: false
+          install_args: http:chrono-judge-registration
       - name: Build and exercise the release binary
         shell: bash
         env:

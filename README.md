@@ -36,3 +36,5 @@ projects 在宿主选定的 routes 发行上使用以下查询。每个查询从
 在宿主检出中执行查询。需要连续性证据时，工具从固定提交实际观察树和文件，按配置核对 Git 工具及环境。空路径集可完全在内存中核对。stdout 的 `previous`、`candidate` 标识所查提交，`git_facts` 保存本次读者产生的观察。调用方必须处理 `error`，null 表示当前计划通过，字符串保留原始拒绝原因。请求无法解码或提交格式无效时退出 2。
 
 scoped CI 可向 `prepare-scoped-plan-v1` 提供原始报告的宿主相对路径 `report_path`，在 `binding` 中提供原请求字段及字符串 `run`。routes 从报告路径与运行身份生成 `operation_state`。收集时向 `check-scoped-plan-v1` 提交 `{plan, binding, report_path}`；它校验原计划身份与整份绑定，成功返回 `{"plan":"<identity>"}`。
+
+`global-selection` 和 `collected-selection-v1` 通过 PATH 上已安装的 `chrono-judge-registration test-retirements-v1` 解释两个端点。文档模式传入固定登记，收集模式传入原封存请求和迁移原件。routes 按输入顺序处理各退役决定，对替代测试和 FILEMAP 的测试取并集。
