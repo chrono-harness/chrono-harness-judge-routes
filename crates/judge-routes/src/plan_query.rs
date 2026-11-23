@@ -176,6 +176,44 @@ pub fn check_plan(input: impl Read) -> Result<Value, String> {
     Ok(json!({"plan":plan.identity}))
 }
 
+/// Expand the caller's scoped request fields using the same original-directory
+/// convention as the full planner.
+fn scoped_binding(mut binding: Value, report_path: &str) -> Result<Value, String> {
+    chrono_harness::relative_path(report_path)?;
+    let fields = binding
+        .as_object_mut()
+        .ok_or("E_PLAN_BINDING: expected scoped request fields")?;
+    if fields.contains_key("operation_state") {
+        return Err("E_PLAN_BINDING: operation_state is derived from the report".into());
+    }
+    let run = fields
+        .get("run")
+        .filter(|run| run.is_string())
+        .ok_or("E_PLAN_BINDING: missing scoped run identity")?;
+    let directory = crate::operation_state_path(report_path, run);
+    fields.insert("operation_state".into(), Value::String(directory));
+    Ok(binding)
+}
+
+/// Replay the original report selection without acquiring tools or running operations.
+pub fn check_scoped_plan(input: impl Read) -> Result<Value, String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Query {
+        plan: Execution,
+        binding: Value,
+        report_path: String,
+    }
+    let q: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;
+    q.plan.validate()?;
+    if q.plan.binding != scoped_binding(q.binding, &q.report_path)? {
+        return Err(
+            "E_PLAN_BINDING: scoped plan differs from the original request and report".into(),
+        );
+    }
+    Ok(json!({"plan":q.plan.identity}))
+}
+
 /// Scoped CI can order the same declarations for scheduling and replay them
 /// for a particular request without probing an executable during collection.
 #[derive(Deserialize)]
@@ -216,16 +254,21 @@ pub fn prepare_scoped_plan(root: &std::path::Path, input: impl Read) -> Result<V
     struct Query {
         graph: ScopedGraph,
         binding: Value,
+        report_path: Option<String>,
         declarations: Value,
         environment: BTreeMap<String, String>,
         reused: BTreeMap<String, chrono_harness::observation::Tool>,
         scheduling: Option<execution::Scheduling>,
     }
     let q: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;
+    let binding = match q.report_path {
+        Some(path) => scoped_binding(q.binding, &path)?,
+        None => q.binding,
+    };
     let graph = q.graph;
     let plan = crate::prepare_scheduled(
         root,
-        q.binding,
+        binding,
         &graph.selected,
         &graph.plans,
         &graph.methods,

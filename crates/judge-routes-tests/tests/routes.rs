@@ -982,3 +982,40 @@ fn source_plan_keeps_fixed_endpoint_identity_and_baseline_classification_errors(
     query["candidate"]["commit"] = serde_json::json!("dev");
     assert!(read(&query).is_err());
 }
+
+#[test]
+fn scoped_binding_uses_the_original_report_and_run_without_observing_tools() {
+    let graph = json!({"selected":[],"plans":{},"methods":{},"execute":{}});
+    let binding = json!({"run":"job-1","candidate":"fixed","entry":{"original":true}});
+    let report = ".chrono-harness/state/unit/check.json";
+    let input = json!({"graph":graph,"binding":binding,"report_path":report,"declarations":{},
+        "environment":{},"reused":{},"scheduling":null});
+    let root = tempfile::tempdir().unwrap();
+    let prepare = |query: &serde_json::Value| {
+        chrono_judge_routes::plan_query::prepare_scoped_plan(
+            root.path(),
+            query.to_string().as_bytes(),
+        )
+    };
+    let plan = prepare(&input).unwrap();
+    assert_eq!(
+        plan["binding"]["operation_state"],
+        chrono_judge_routes::operation_state_path(report, &binding["run"])
+    );
+    let original = json!({"plan":plan,"binding":binding,"report_path":report});
+    let check = |q: &serde_json::Value| {
+        chrono_judge_routes::plan_query::check_scoped_plan(q.to_string().as_bytes())
+    };
+    assert_eq!(check(&original).unwrap()["plan"], plan["identity"]);
+    for (field, value) in [("run", json!("job-2")), ("entry", json!({}))] {
+        let mut wrong = original.clone();
+        wrong["binding"][field] = value;
+        assert!(check(&wrong).unwrap_err().contains("E_PLAN_BINDING"));
+    }
+    let mut wrong = original.clone();
+    wrong["report_path"] = json!(".chrono-harness/state/other/check.json");
+    assert!(check(&wrong).unwrap_err().contains("E_PLAN_BINDING"));
+    let mut supplied = input;
+    supplied["binding"]["operation_state"] = plan["binding"]["operation_state"].clone();
+    assert!(prepare(&supplied).unwrap_err().contains("E_PLAN_BINDING"));
+}
