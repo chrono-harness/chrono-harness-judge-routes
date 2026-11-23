@@ -78,14 +78,19 @@ fn main() -> std::process::ExitCode {
         };
     }
     use std::os::unix::process::CommandExt;
-    let program = match std::env::current_exe() {
+    let invoked = std::env::args_os().next().map(std::path::PathBuf::from);
+    let executable = match invoked.as_deref() {
+        Some(path) if path.components().count() > 1 => std::path::absolute(path),
+        _ => std::env::current_exe(),
+    };
+    let program = match executable {
         Ok(program) => program,
         Err(error) => {
             eprintln!("{error}");
             return 2.into();
         }
     };
-    let error = std::process::Command::new("chrono-harness")
+    let error = std::process::Command::new(chrono_judge_routes::runner_program())
         .args([
             "judge-command-v1",
             "chrono-judge-routes",

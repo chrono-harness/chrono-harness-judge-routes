@@ -45,3 +45,5 @@ scoped CI 可向 `prepare-scoped-plan-v1` 提供原始报告的宿主相对路�
 `collection-plan-v1`、`full-operations-v1` 和 `unit-declarations-v1` 把收到的 FILEMAP 和项目文档原样交给宿主选定的 `chrono-judge-registration execution-declarations-v1`。routes 使用返回的计划和方法验证单元归属、合并共享操作并展开参数。收集计划仍按原执行目录重建，登记程序从本次检出的 PATH 解析。
 
 普通判官把封存请求交给已安装的 registration 的 `route-views-v1`。routes 读取 FILEMAP 的影响、处理本次退役选择，再通过 `route-inputs-v1` 核对选中范围的输入。调用保留请求的原始工作目录和 Git 观察，回执查询仍可在原工具与原检出已经移除后运行。
+
+宿主通过 PATH 配置独立安装的 runner。若调用方清空环境并通过其工具目录内的显式路径启动 routes，routes 使用该路径旁的 `chrono-harness` 别名。这样每个别名可以指向各自独立的发布与安装目录。

@@ -8,12 +8,31 @@ use std::{
     process::{Command, Stdio},
 };
 
+/// An isolated host launches the route judge through a registered tool alias.
+/// Resolve its sibling in that explicit host directory when PATH was cleared.
+pub fn runner_program() -> std::path::PathBuf {
+    if std::env::var_os("PATH").is_none_or(|path| path.is_empty()) {
+        if let Some(directory) = std::env::args_os()
+            .next()
+            .as_deref()
+            .map(Path::new)
+            .and_then(Path::parent)
+            .filter(|parent| !parent.as_os_str().is_empty())
+        {
+            if let Ok(directory) = std::path::absolute(directory) {
+                return directory.join("chrono-harness");
+            }
+        }
+    }
+    "chrono-harness".into()
+}
+
 fn call(
     root: Option<&Path>,
     operation: &str,
     send: impl FnOnce(std::process::ChildStdin) -> Result<(), String> + Send,
 ) -> Result<Vec<u8>, String> {
-    let mut cmd = Command::new("chrono-harness");
+    let mut cmd = Command::new(runner_program());
     if let Some(root) = root {
         cmd.current_dir(root);
     }

@@ -1124,3 +1124,48 @@ fn scoped_binding_uses_the_original_report_and_run_without_observing_tools() {
     supplied["binding"]["operation_state"] = plan["binding"]["operation_state"].clone();
     assert!(prepare(&supplied).unwrap_err().contains("E_PLAN_BINDING"));
 }
+
+#[test]
+fn source_query_uses_the_host_alias_when_its_caller_clears_path() {
+    use std::io::Write;
+    use std::process::{Command, Stdio};
+    let root = tempfile::tempdir().unwrap();
+    let bin = root.path().join("tools");
+    fs::create_dir(&bin).unwrap();
+    let program = std::env::var_os("CHRONO_TEST_ROUTES").unwrap();
+    symlink(program, bin.join("chrono-judge-routes")).unwrap();
+    symlink(
+        env!("CARGO_BIN_EXE_chrono-harness"),
+        bin.join("chrono-harness"),
+    )
+    .unwrap();
+    let commit = "a".repeat(40);
+    let query = json!({"previous":null,"candidate":{"commit":commit,
+        "filemap":{"files":[],"require_new_file_classification":true},
+        "projects":{"projects":[]},"artifacts":[]},"affected":[],"methods":{},"operations":[],"git":null});
+    let mut child = Command::new(bin.join("chrono-judge-routes"))
+        .arg("source-plan-v1")
+        .current_dir(root.path())
+        .env_clear()
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    child
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(&serde_json::to_vec(&query).unwrap())
+        .unwrap();
+    let output = child.wait_with_output().unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&output.stdout).unwrap(),
+        json!({"previous":null,"candidate":commit,"error":null,"git_facts":null})
+    );
+}
