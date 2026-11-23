@@ -2,6 +2,7 @@
 // Routes owns method planning and comparison with runner-produced observations.
 #[cfg(not(verus_keep_ghost))]
 mod commands;
+pub use commands::runner_program;
 pub mod evidence;
 mod units;
 pub use evidence::{CompiledArtifact, OutputContract, ProcessResult, Tool};
