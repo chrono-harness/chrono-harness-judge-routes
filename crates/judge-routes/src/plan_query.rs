@@ -79,6 +79,40 @@ pub fn collection_plan(input: impl Read) -> Result<Value, String> {
     serde_json::to_value(plan).map_err(|e| e.to_string())
 }
 
+/// Plan the full CI obligations from the interpreted endpoint, without running tools.
+pub fn full_operations(input: impl Read) -> Result<Value, String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Query {
+        selected: BTreeSet<String>,
+        filemap: Value,
+        projects: Value,
+        test_operations: BTreeMap<String, Vec<String>>,
+        execution_units: Option<Value>,
+    }
+    let query: Query = serde_json::from_reader(input).map_err(|error| error.to_string())?;
+    let plans = execution::plans(&query.filemap)?;
+    let required_units = query
+        .execution_units
+        .as_ref()
+        .map(|block| {
+            let units = crate::validate_unit_assignments(block, &plans)?;
+            Ok::<_, String>(chrono_harness::units::required(&units, &query.selected))
+        })
+        .transpose()?;
+    let methods = execution::methods(&query.projects)?;
+    let (selected, operations) = crate::order(
+        &query.selected,
+        &plans,
+        &methods,
+        &unique_actions(query.test_operations),
+    )?;
+    Ok(
+        json!({"selected": selected, "operations": operations, "methods": methods,
+        "required_units": required_units}),
+    )
+}
+
 /// Rebuild the global operation graph and a unit's expanded operations at its original coordinates.
 pub fn unit_declarations(input: impl Read) -> Result<Value, String> {
     #[derive(Deserialize)]
