@@ -447,6 +447,27 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
         observed["operations"].get(name).unwrap(),
         &serde_json::Value::Null
     );
+    let one = |original: serde_json::Value, method: &str| {
+        let mut selected = json!({"plan":plan.identity, "root":plan.root,
+            "environment":plan.environment, "operation":op, "tool":tool,"receipt":original});
+        selected["operation"]["method"]["operation"] = json!(method);
+        chrono_judge_routes::plan_query::check_operation_receipt(selected.to_string().as_bytes())
+            .unwrap()
+    };
+    assert_eq!(
+        one(json!(receipt), name),
+        json!({"plan":plan.identity,"operation":name,"error":null})
+    );
+    assert!(
+        one(json!(receipt), "other")["error"]
+            .as_str()
+            .unwrap()
+            .contains("E_RECEIPT_MISMATCH")
+    );
+    assert_eq!(
+        one(serde_json::Value::Null, name)["error"],
+        "E_ROUTE_MISSING: missing execution receipt"
+    );
     let absent = evidence(&wire_plan, json!({})).unwrap();
     assert_eq!(
         absent["operations"][name],
