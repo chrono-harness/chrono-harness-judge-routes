@@ -424,6 +424,38 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
     assert_eq!(data[2], "");
     assert!(data[3].is_null());
     let receipt = Receipt::new(&plan, op, process).unwrap();
+    let evidence = |plan: &serde_json::Value, receipts: serde_json::Value| {
+        let bytes = serde_json::to_vec(&json!({"plan":plan,"receipts":receipts})).unwrap();
+        chrono_judge_routes::plan_query::check_plan_receipts(bytes.as_slice())
+    };
+    let wire_plan = serde_json::to_value(&plan).unwrap();
+    let name = &op.method.operation;
+    let observed = evidence(&wire_plan, json!({ (name):receipt})).unwrap();
+    assert_eq!(observed["plan"], plan.identity);
+    assert_eq!(
+        observed["operations"].get(name).unwrap(),
+        &serde_json::Value::Null
+    );
+    let absent = evidence(&wire_plan, json!({})).unwrap();
+    assert_eq!(
+        absent["operations"][name],
+        compare(&plan, op, None).unwrap_err()
+    );
+    let mut bad_receipt = serde_json::to_value(&receipt).unwrap();
+    bad_receipt["digest"] = json!("0".repeat(64));
+    let changed = evidence(&wire_plan, json!({(name):bad_receipt})).unwrap();
+    assert!(
+        changed["operations"][name]
+            .as_str()
+            .unwrap()
+            .contains("E_RECEIPT_MISMATCH")
+    );
+    let mut bad_plan = wire_plan;
+    bad_plan["identity"] = json!("0".repeat(64));
+    assert_eq!(
+        evidence(&bad_plan, json!({})).unwrap_err(),
+        "E_PLAN_IDENTITY"
+    );
     compare(&plan, op, Some(&receipt)).unwrap();
     assert!(compare(&plan, op, None).is_err());
     let mut tampered = receipt.clone();
@@ -745,4 +777,26 @@ fn scheduling_binds_identity_and_collection_reconstructs_without_processes() {
     assert!(changed.validate().is_err());
     let bad = serde_json::from_value(json!({"max_running":2,"resources":[],"claims":{}})).unwrap();
     assert!(legacy.with_scheduling(Some(bad)).is_err());
+}
+
+#[test]
+fn collection_query_replays_only_the_unique_registered_terminal_operation() {
+    let mut query = json!({"root":"/fixture","binding":{"candidate":"fixed"},
+        "selected":["test:example"],"filemap":{"execution_plans":{"test:example":{
+        "operations":["run.example"],"timeout_seconds":12,"output_limit_bytes":2048}}},
+        "projects":{"projects":[],"scripts":[{"id":"example","actions":{"execute":{
+        "operation":"run.example","tool":"python","argv":["{candidate}"]}}}]},
+        "test_operations":{"test:example":["run.example"]},"environment":{"MODE":"offline"}});
+    let replay = |data: &serde_json::Value| {
+        chrono_judge_routes::plan_query::collection_plan(data.to_string().as_bytes())
+    };
+    let result = replay(&query).unwrap();
+    assert_eq!(result["operations"][0]["method"]["argv"], json!(["fixed"]));
+    assert_eq!(result["operations"][0]["timeout_seconds"], 12);
+    assert_eq!(result["environment"], json!({"MODE":"offline"}));
+    assert_eq!(result["tools"], json!({}));
+    let plan: chrono_judge_routes::Execution = serde_json::from_value(result).unwrap();
+    plan.validate().unwrap();
+    query["test_operations"]["test:example"] = json!(["run.example", "run.other"]);
+    assert!(replay(&query).is_err());
 }

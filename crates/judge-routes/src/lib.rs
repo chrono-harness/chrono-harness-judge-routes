@@ -698,6 +698,15 @@ impl Receipt {
 #[cfg(not(verus_keep_ghost))]
 pub fn compare(plan: &Execution, op: &Operation, receipt: Option<&Receipt>) -> Result<(), String> {
     plan.validate()?;
+    compare_validated(plan, op, receipt)
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn compare_validated(
+    plan: &Execution,
+    op: &Operation,
+    receipt: Option<&Receipt>,
+) -> Result<(), String> {
     let r = receipt.ok_or("E_ROUTE_MISSING: missing execution receipt")?;
     let tool = plan
         .tools
@@ -748,10 +757,25 @@ pub fn compare(plan: &Execution, op: &Operation, receipt: Option<&Receipt>) -> R
 }
 #[cfg(not(verus_keep_ghost))]
 pub fn execute_actions(r: &Registrations) -> BTreeMap<String, String> {
-    r.test_bindings()
+    unique_actions(r.test_bindings().into_iter().map(|(id, bindings)| {
+        (
+            id,
+            bindings
+                .into_iter()
+                .map(|binding| binding.operation)
+                .collect(),
+        )
+    }))
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn unique_actions(
+    bindings: impl IntoIterator<Item = (String, Vec<String>)>,
+) -> BTreeMap<String, String> {
+    bindings
         .into_iter()
-        .filter_map(|(id, bindings)| match bindings.as_slice() {
-            [binding] => Some((id, binding.operation.clone())),
+        .filter_map(|(id, operations)| match operations.as_slice() {
+            [operation] => Some((id, operation.clone())),
             _ => None,
         })
         .collect()
@@ -789,7 +813,10 @@ pub fn judge(req: &Request) -> Response {
 #[cfg(not(verus_keep_ghost))]
 mod impact;
 #[cfg(not(verus_keep_ghost))]
+pub mod plan_query;
+#[cfg(not(verus_keep_ghost))]
 pub mod selection;
+
 #[cfg(not(verus_keep_ghost))]
 fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Value>, String> {
     req.validate()?;
