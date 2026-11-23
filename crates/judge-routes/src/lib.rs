@@ -57,7 +57,7 @@ use chrono_harness::{
     wire::{self, Finding, Request, Response, Status},
 };
 #[cfg(not(verus_keep_ghost))]
-use chrono_judge_registration::execution::{Method, Plan, Scheduling};
+use chrono_judge_registration::execution::{Plan, Scheduling};
 #[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
 #[cfg(not(verus_keep_ghost))]
@@ -68,6 +68,19 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
+
+/// The declared method carried by each operation in the public route plan.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+#[cfg(not(verus_keep_ghost))]
+pub struct Method {
+    pub owner: String,
+    pub operation: String,
+    pub tool: String,
+    pub argv: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub output_contract: Option<chrono_harness::verified_verifier::OutputContract>,
+}
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -238,7 +251,12 @@ pub fn order(
         }
         let mut previous = None;
         for id in &plan.operations {
-            let bounds = plan.bounds(id);
+            let (timeout_seconds, output_limit_bytes) = plan
+                .operation_bounds
+                .get(id)
+                .map_or((plan.timeout_seconds, plan.output_limit_bytes), |bounds| {
+                    (bounds.timeout_seconds, bounds.output_limit_bytes)
+                });
             let defs = methods
                 .get(id)
                 .ok_or_else(|| format!("E_ROUTE_MISSING: {id}"))?;
@@ -248,11 +266,10 @@ pub fn order(
             let op = operations.entry(id.clone()).or_insert_with(|| Operation {
                 method: defs[0].clone(),
                 predecessors: BTreeSet::new(),
-                timeout_seconds: bounds.timeout_seconds,
-                output_limit_bytes: bounds.output_limit_bytes,
+                timeout_seconds,
+                output_limit_bytes,
             });
-            if op.timeout_seconds != bounds.timeout_seconds
-                || op.output_limit_bytes != bounds.output_limit_bytes
+            if op.timeout_seconds != timeout_seconds || op.output_limit_bytes != output_limit_bytes
             {
                 return Err(format!("E_PLAN_BOUNDS: inconsistent shared operation {id}"));
             }
