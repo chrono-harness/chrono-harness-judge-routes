@@ -8,6 +8,22 @@ use vstd::{contrib::exec_spec::ExecSpecEq, string::StringExecFns};
 
 verus! {
 
+/// Route planning checks the selected roots only after the source inventory is admitted.
+pub fn after_inventory<E, F: FnOnce() -> Result<(), E>>(
+    inventory: Result<(), E>, selected: F,
+) -> (out: Result<(), E>)
+    requires inventory.is_ok() ==> selected.requires(()),
+    ensures match inventory {
+        Err(error) => out == Err::<(), E>(error),
+        Ok(()) => selected.ensures((), out),
+    },
+{
+    match inventory {
+        Err(error) => Err(error),
+        Ok(()) => selected(),
+    }
+}
+
 /// The wire decoder supplies the path of each inventory row without copying that row.
 pub trait InventoryPath {
     spec fn path_view(&self) -> Seq<char>;

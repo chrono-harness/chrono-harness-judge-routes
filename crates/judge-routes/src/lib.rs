@@ -36,10 +36,15 @@ pub fn validate_source_plan<'a>(
         Err(error) => source_plan_error(registry, previous, nodes@, methods@, scopes@, evidence) == Some(error.view()),
     },
 {
-    match sources::validate_file_classifications(registry, previous, evidence) {
-        Err(error) => Err(error),
-        Ok(()) => sources::validate_selected_roots(&registry.files, nodes, methods, scopes, evidence),
-    }
+    let inventory = sources::validate_file_classifications(registry, previous, evidence);
+    verified_source_pipeline::after_inventory(inventory, || -> (result: Result<(), sources::CoverageError<'a>>)
+        ensures match result {
+            Ok(()) => sources::selected_plan_error(registry.files.entries@, nodes@, methods@, scopes@,
+                matches!(registry.files.require_new_file_classification, Some(true)), evidence, 0).is_none(),
+            Err(error) => sources::selected_plan_error(registry.files.entries@, nodes@, methods@, scopes@,
+                matches!(registry.files.require_new_file_classification, Some(true)), evidence, 0) == Some(error.view()),
+        },
+    { sources::validate_selected_roots(&registry.files, nodes, methods, scopes, evidence) })
 }
 
 } // verus!
@@ -760,7 +765,6 @@ pub mod plan_query;
 pub mod selection;
 #[cfg(not(verus_keep_ghost))]
 pub mod source_plan;
-#[cfg(not(verus_keep_ghost))]
 pub mod verified_source_pipeline;
 
 #[cfg(not(verus_keep_ghost))]

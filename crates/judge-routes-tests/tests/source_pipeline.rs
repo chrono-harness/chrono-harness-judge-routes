@@ -13,6 +13,22 @@ fn expect_continuity_bool(actual: bool)
     requires actual,
 { if !actual { panic!(); } }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn route_coverage_preserves_the_inventory_error_and_the_selected_roots_result() {
+    let bad_inventory = policy::after_inventory(Err(1u8), || -> (r: Result<(), u8>)
+        ensures r == Err::<(), u8>(2u8),
+    { Err(2) });
+    expect_continuity_bool(matches!(bad_inventory, Err(1)));
+    let missing_root = policy::after_inventory(Ok(()), || -> (r: Result<(), u8>)
+        ensures r == Err::<(), u8>(2u8),
+    { Err(2) });
+    expect_continuity_bool(matches!(missing_root, Err(2)));
+    let complete = policy::after_inventory(Ok(()), || -> (r: Result<(), u8>)
+        ensures r.is_ok(),
+    { Ok(()) });
+    expect_continuity_bool(complete.is_ok());
+}
+
 struct InventoryRow { path: String }
 
 impl policy::InventoryPath for InventoryRow {
@@ -118,4 +134,54 @@ fn continuity_validation_failure_keeps_its_full_original_error() {
     let exact = match result { Err(error) => <&str>::exec_eq(error.as_str(), "原判定错误\0é"), Ok(_) => false };
     expect_continuity_bool(exact);
 }
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn source_plan_checks_the_concrete_inventory_before_the_affected_file() {
+    use chrono_harness::verified_verifier::sources::{
+        SourceFile, continuity::Continuity, source_registry,
+    };
+    use chrono_judge_routes::validate_source_plan;
+    let inventory = source_registry(
+        vec![SourceFile {
+            path: "x".into(),
+            verification: None,
+        }],
+        Some(true),
+    );
+    let nodes = vec!["file:x".to_owned()];
+    let evidence = Continuity::empty();
+    let check = |previous| {
+        validate_source_plan(
+            &inventory,
+            previous,
+            &nodes,
+            &Vec::new(),
+            &Vec::new(),
+            &evidence,
+        )
+    };
+    assert_eq!(
+        check(Err("原基线错误\0é")).unwrap_err().path,
+        "原基线错误\0é"
+    );
+    let missing = check(Ok(Some(&inventory))).unwrap_err();
+    assert_eq!(
+        missing.message,
+        "E_VERUS_COVERAGE: affected file lacks explicit verification classification: "
+    );
+    assert_eq!(missing.path, "x");
+    let empty = source_registry(Vec::new(), Some(true));
+    assert!(
+        validate_source_plan(
+            &empty,
+            Ok(None),
+            &Vec::new(),
+            &Vec::new(),
+            &Vec::new(),
+            &evidence
+        )
+        .is_ok()
+    );
 }
