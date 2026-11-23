@@ -1,5 +1,4 @@
 use chrono_harness::wire::Request;
-use chrono_judge_registration::Registrations;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
@@ -28,18 +27,6 @@ fn merge(
     Ok(selected)
 }
 
-pub fn global_selection(
-    old: &Registrations,
-    current: &Registrations,
-    tests: &[String],
-    retired: &[String],
-    deferred: bool,
-) -> Result<BTreeSet<String>, String> {
-    merge(tests.to_vec(), retired, deferred, |test| {
-        chrono_judge_registration::validate_test_retirement(old, current, test)
-    })
-}
-
 #[derive(Deserialize)]
 struct Documents {
     config: String,
@@ -65,15 +52,15 @@ struct Decisions {
     retirements: BTreeMap<String, Result<Option<String>, String>>,
 }
 
-fn write_selection(
+pub(crate) fn choose(
+    judge: &str,
     endpoints: Value,
     expected: Value,
     tests: Vec<String>,
     retired: Vec<String>,
-    mut output: impl Write,
     run: impl FnOnce(&str, &Value) -> Result<Vec<u8>, String>,
-) -> Result<(), String> {
-    let query = json!({"judge":"routes","endpoints":endpoints,"retired_tests":retired});
+) -> Result<BTreeSet<String>, String> {
+    let query = json!({"judge":judge,"endpoints":endpoints,"retired_tests":retired});
     let reply: Decisions =
         serde_json::from_slice(&run("test-retirements-v1", &query)?).map_err(|e| e.to_string())?;
     if reply.request_id != expected
@@ -83,9 +70,20 @@ fn write_selection(
             "E_RETIREMENT: registration reply differs from requested tests or collection".into(),
         );
     }
-    let selected = merge(tests, &retired, reply.downstream, |test| {
+    merge(tests, &retired, reply.downstream, |test| {
         reply.retirements[test].clone()
-    })?;
+    })
+}
+
+fn write_selection(
+    endpoints: Value,
+    expected: Value,
+    tests: Vec<String>,
+    retired: Vec<String>,
+    mut output: impl Write,
+    run: impl FnOnce(&str, &Value) -> Result<Vec<u8>, String>,
+) -> Result<(), String> {
+    let selected = choose("routes", endpoints, expected, tests, retired, run)?;
     serde_json::to_writer(&mut output, &selected).map_err(|e| e.to_string())?;
     output.flush().map_err(|e| e.to_string())
 }
