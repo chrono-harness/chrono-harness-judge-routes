@@ -949,3 +949,36 @@ fn full_scheduling_validates_even_unselected_assignments_and_collection_replays_
     query["test_operations"]["test:a"] = json!(["run.a", "run.b"]);
     assert!(read(&query).unwrap_err().contains("E_ROUTE_MISSING"));
 }
+
+#[test]
+fn source_plan_keeps_fixed_endpoint_identity_and_baseline_classification_errors() {
+    let commit = "a".repeat(40);
+    let endpoint = serde_json::json!({"commit":commit,"filemap":{"files":[],"require_new_file_classification":true},
+        "projects":{"projects":[]}, "artifacts":[]});
+    let mut query = serde_json::json!({"previous":null,"candidate":endpoint,"affected":[],
+        "methods":{},"operations":[],"git":null});
+    let read = |value: &serde_json::Value| {
+        chrono_judge_routes::source_plan::query(
+            std::path::Path::new("missing-checkout"),
+            value.to_string().as_bytes(),
+        )
+    };
+    assert_eq!(
+        read(&query).unwrap(),
+        serde_json::json!({"previous":null,"candidate":commit,"error":null,"git_facts":null})
+    );
+    let mut previous = endpoint;
+    previous["filemap"]["files"] = serde_json::json!(false);
+    query["previous"] = previous;
+    let rejected = read(&query).unwrap();
+    assert_eq!(rejected["previous"], commit);
+    assert!(rejected["git_facts"].is_null());
+    assert!(
+        rejected["error"]
+            .as_str()
+            .unwrap()
+            .starts_with("E_VERUS_COVERAGE: base file classifications unavailable:")
+    );
+    query["candidate"]["commit"] = serde_json::json!("dev");
+    assert!(read(&query).is_err());
+}

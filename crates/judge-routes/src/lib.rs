@@ -758,6 +758,10 @@ mod impact;
 pub mod plan_query;
 #[cfg(not(verus_keep_ghost))]
 pub mod selection;
+#[cfg(not(verus_keep_ghost))]
+pub mod source_plan;
+#[cfg(not(verus_keep_ghost))]
+pub mod verified_source_pipeline;
 
 #[cfg(not(verus_keep_ghost))]
 fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Value>, String> {
@@ -804,43 +808,29 @@ fn evaluate(req: &Request, reader: &facts::Reader) -> Result<BTreeMap<String, Va
     let methods = chrono_judge_registration::execution::methods(r.projects())?;
     let (global_chosen, global_operations) =
         order(&selected, &global_plans, &methods, &execute_actions(&r))?;
-    let previous_registry =
-        serde_json::from_value(old.filemap().clone()).map_err(|error| error.to_string());
-    let registry: chrono_harness::verified_verifier::sources::SourceRegistry =
-        serde_json::from_value(r.filemap().clone()).map_err(|error| error.to_string())?;
-    let continuity = chrono_harness::verified_verifier::sources::continuity::observe(
-        reader,
-        &req.candidate.root,
-        Some((
-            &req.base.commit,
-            old.filemap(),
-            old.projects(),
-            facts::artifact_directories(old.config())?
-                .into_iter()
-                .map(str::to_owned)
-                .collect(),
-        )),
-        (
-            &req.candidate.commit,
-            r.filemap(),
-            r.projects(),
-            facts::artifact_directories(r.config())?
-                .into_iter()
-                .map(str::to_owned)
-                .collect(),
-        ),
-        &chrono_harness::verified_verifier::sources::continuity_paths(
-            &registry.files,
-            &impact.reached,
-        ),
-    )?;
-    validate_proof_plan(
-        &registry,
-        previous_registry.as_ref().map(Some).map_err(String::as_str),
-        &impact.reached.into_iter().collect(),
+    let old_outputs = facts::artifact_directories(old.config())?
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    let outputs = facts::artifact_directories(r.config())?
+        .into_iter()
+        .map(str::to_owned)
+        .collect();
+    source_plan::validate(
+        Some((&req.base.commit, old.filemap(), old.projects(), old_outputs)),
+        (&req.candidate.commit, r.filemap(), r.projects(), outputs),
+        &impact.reached,
         &methods,
         &global_operations,
-        &continuity,
+        |previous, candidate, paths| {
+            chrono_harness::verified_verifier::sources::continuity::observe(
+                reader,
+                &req.candidate.root,
+                previous,
+                candidate,
+                paths,
+            )
+        },
     )?;
     let global_selected = selected.clone();
     let selected = unit_selection(req, &selected, &global_plans)?;

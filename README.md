@@ -30,3 +30,7 @@ projects 在宿主选定的 routes 发行上使用以下查询。每个查询从
 - 执行前，调用方在宿主根目录运行 `prepare-scoped-plan-v1`，提供 `graph`、`binding`、`declarations`、`environment`、`reused` 和可选的 `scheduling`。routes 校验方法、限制和调度声明，获取缺少的工具版本观察，输出有身份绑定的完整计划。两个命令成功时向 stdout 写 JSON 并退出 0，失败时向 stderr 写原因并退出 2。
 
 完整 CI 在调度与收集时向 `full-operations-v1` 提交已解释的 `filemap`、`projects`、按测试名索引的终结操作声明 `test_operations` 和本次选择 `selected`。调度时额外传入 `execution_units`，routes 先验证所有测试和共享操作的单元归属，再返回 `required_units`。收集时省略该字段，返回的 `required_units` 为 null。两种调用都返回选中的计划、按依赖排序的操作及供证明核对使用的完整方法声明。命令从 stdin 读 JSON，成功向 stdout 写 JSON，拒绝输入时向 stderr 写原因并退出 2。
+
+完整和限定范围的 CI 可以调用 `source-plan-v1` 核对源码证明计划。stdin 提供解释后的 `previous`（初始提交为 null）和 `candidate`，每个端点含固定 `commit`、`filemap`、`projects` 和产物目录 `artifacts`。另传受影响的节点 `affected`、登记方法 `methods` 和有序 `operations`。已绑定 Git 的调用方传入 `git.config` 和原读者的 `git.git_facts`（可略去进程数组）；旧式未绑定读者传 null。
+
+在宿主检出中执行查询。需要连续性证据时，工具从固定提交实际观察树和文件，按配置核对 Git 工具及环境。空路径集可完全在内存中核对。stdout 的 `previous`、`candidate` 标识所查提交，`git_facts` 保存本次读者产生的观察。调用方必须处理 `error`，null 表示当前计划通过，字符串保留原始拒绝原因。请求无法解码或提交格式无效时退出 2。

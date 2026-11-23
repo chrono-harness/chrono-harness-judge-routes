@@ -8,6 +8,7 @@ fn main() -> std::process::ExitCode {
         | "plan-context-v1"
         | "collection-plan-v1"
         | "full-operations-v1"
+        | "source-plan-v1"
         | "unit-declarations-v1"
         | "retained-tool-v1"
         | "check-plan-v1"
@@ -36,6 +37,9 @@ fn main() -> std::process::ExitCode {
                 let reply = match command {
                     "check-plan-receipts-v1" => plan_query::check_plan_receipts(input),
                     "plan-context-v1" => plan_query::plan_context(input),
+                    "source-plan-v1" => std::env::current_dir()
+                        .map_err(|error| error.to_string())
+                        .and_then(|root| chrono_judge_routes::source_plan::query(&root, input)),
                     "full-operations-v1" => plan_query::full_operations(input),
                     "retained-tool-v1" => plan_query::retained_tool(input),
                     "scoped-operations-v1" => plan_query::scoped_operations(input),
