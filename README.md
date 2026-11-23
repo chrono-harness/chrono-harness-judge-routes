@@ -13,3 +13,7 @@
 在本仓的 GitHub Releases 选择平台二进制及同标签的 SHA256SUMS，校验后即可安装或切换版本。
 
 完整 CI 收集从宿主根目录调用 `collected-selection-v1`。stdin 提供绑定当前检出的 collect `request`、FILEMAP 选定的 `tests` 和 `retired_tests`。历史转换需要 `migration`，其中 `units` 必须是登记要求的执行单元，`originals` 是这些单元的原始清单。routes 根据解释后的两端登记核对历史测试的替代或退役，向 stdout 返回排序去重的测试数组。输入和输出错误写入 stderr 并退出 2。
+
+`check-plan-receipts-v1` 接收 JSON 对象 `{plan, receipts}`。调用方按操作名提供实际回执，命令使用 routes 的计划身份与回执核对逻辑。成功输出计划身份 `plan` 和计划内各操作的 `operations` 映射。匹配的回执对应 null，缺少或不匹配的回执对应原始错误。调用方按自己的完整性和执行成功条件采用这些结果。无效计划、无效输入或输出失败时返回 2 并写 stderr。
+
+`plan-context-v1` 从 stdin 读取 `request`、`effective_inputs` 和按操作名索引的原始参数模板 `templates`。stdout 包含 `request_id`、routes 的请求绑定 `binding` 和展开后的 `expanded`。重放收集计划时，`collection-plan-v1` 接收原坐标 `root`、`binding`、全局测试 `selected`、已解释的 `filemap` 和 `projects`、每个测试的操作声明列表 `test_operations` 以及 `environment`，返回完整的原生执行计划。这两个查询使用同一套绑定和排序逻辑，成功退出 0，错误写入 stderr 并退出 2。
