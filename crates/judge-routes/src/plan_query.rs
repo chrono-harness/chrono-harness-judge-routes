@@ -1,7 +1,7 @@
 //! Read and replay route evidence without executing operations or acquiring tools.
+use crate::declarations as execution;
 use crate::{Execution, Method, Receipt, compare_validated, unique_actions};
 use chrono_harness::wire::Request;
-use chrono_judge_registration::execution;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
@@ -247,6 +247,14 @@ pub fn check_plan(input: impl Read) -> Result<Value, String> {
     let plan: Execution = serde_json::from_reader(input).map_err(|e| e.to_string())?;
     plan.validate()?;
     Ok(json!({"plan":plan.identity}))
+}
+
+/// Admit a plan and resolve the order in which its executor considers ready operations.
+pub fn dispatch_plan(input: impl Read) -> Result<Value, String> {
+    let plan: Execution = serde_json::from_reader(input).map_err(|e| e.to_string())?;
+    plan.validate_graph()?;
+    let dispatch = execution::Dispatch::for_plan(&plan)?;
+    Ok(json!({"plan": plan.identity, "dispatch": dispatch}))
 }
 
 /// Expand the caller's scoped request fields using the same original-directory

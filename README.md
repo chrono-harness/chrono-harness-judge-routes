@@ -23,6 +23,7 @@
 projects 在宿主选定的 routes 发行上使用以下查询。每个查询从 stdin 读取一个 JSON 值，通过 stdout 返回 JSON，失败时写 stderr 并退出 2。
 
 - `check-plan-v1` 校验原始计划的身份、操作顺序、资源声明和执行限制，返回 `plan` 身份。
+- `dispatch-plan-v1` 在执行前校验同一原始计划，返回其 `plan` 身份、`dispatch.max_running` 并发上限和 `dispatch.order`。次序为覆盖全部操作的零基下标，优先项按登记次序排列，其余沿用原计划次序。projects 按这个次序查找就绪操作，并与正在运行的操作核对原计划中的资源和输出路径。查询和回放均可在空 PATH 下使用。
 - `unit-declarations-v1` 接收原始 `request`、`effective_inputs`、两组登记 `filemap` 和 `projects`、每个测试的 `test_operations`、全局选择 `global` 和其中一个执行单元的选择 `unit`。返回请求身份、绑定、全局操作图及该单元展开后的操作。
 - `retained-tool-v1` 核对采集时的 `tool`、`program`、`version_argv`、`environment`、`root` 及 `expected_version`，成功返回工具的 `sha256`。收集端可在原执行目录和工具已经清除后核对此凭证。
 
