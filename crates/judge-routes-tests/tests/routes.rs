@@ -812,6 +812,51 @@ fn scheduling_binds_identity_and_collection_reconstructs_without_processes() {
 }
 
 #[test]
+fn dispatch_keeps_selected_priority_and_original_order_for_unranked_operations() {
+    let ids = ["a", "b", "c", "d"];
+    let plans = ids
+        .iter()
+        .map(|id| (format!("test:{id}"), plan(&[id])))
+        .collect::<BTreeMap<_, _>>();
+    let methods = ids
+        .iter()
+        .map(|id| (id.to_string(), vec![method(id, vec![])]))
+        .collect();
+    let actions = ids
+        .iter()
+        .map(|id| (format!("test:{id}"), id.to_string()))
+        .collect();
+    let original = chrono_judge_routes::prepare_collection(
+        std::path::Path::new("/original"),
+        json!({}),
+        &plans.keys().cloned().collect(),
+        &plans,
+        &methods,
+        &actions,
+        BTreeMap::new(),
+    )
+    .unwrap();
+    let dispatch = |plan: &chrono_judge_routes::Execution| {
+        chrono_judge_routes::plan_query::dispatch_plan(serde_json::to_vec(plan).unwrap().as_slice())
+            .unwrap()
+    };
+    assert_eq!(
+        dispatch(&original),
+        json!({"plan":original.identity, "dispatch":{"max_running":1, "order":[0,1,2,3]}})
+    );
+    let claims: BTreeMap<_, _> = ["a", "b", "c", "d", "unselected"]
+        .iter()
+        .map(|id| (*id, json!({"resources":[],"outputs":[]})))
+        .collect();
+    let policy = serde_json::from_value(json!({"max_running":2, "resources":[], "claims":claims, "priority":["d","unselected","b"]})).unwrap();
+    let scheduled = original.with_scheduling(Some(policy)).unwrap();
+    assert_eq!(
+        dispatch(&scheduled),
+        json!({"plan":scheduled.identity, "dispatch":{"max_running":2, "order":[3,1,0,2]}})
+    );
+}
+
+#[test]
 fn collection_query_replays_only_the_unique_registered_terminal_operation() {
     let mut query = json!({"root":"/fixture","binding":{"candidate":"fixed"},
         "selected":["test:example"],"filemap":{"execution_plans":{"test:example":{

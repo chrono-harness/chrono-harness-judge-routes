@@ -57,7 +57,9 @@ use chrono_harness::{
     wire::{self, Finding, Request, Response, Status},
 };
 #[cfg(not(verus_keep_ghost))]
-use chrono_judge_registration::execution::{Plan, Scheduling};
+mod declarations;
+#[cfg(not(verus_keep_ghost))]
+pub use declarations::{Plan, Scheduling};
 #[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
 #[cfg(not(verus_keep_ghost))]
@@ -163,7 +165,7 @@ impl Execution {
         value.as_object_mut().unwrap().remove("identity");
         wire::digest(&value)
     }
-    pub fn validate(&self) -> Result<(), String> {
+    fn validate_graph(&self) -> Result<(), String> {
         if self.schema != "chrono-execution-plan/v1" || self.identity != self.digest()? {
             return Err("E_PLAN_IDENTITY".into());
         }
@@ -181,16 +183,12 @@ impl Execution {
                 );
             }
         }
+        Ok(())
+    }
+    pub fn validate(&self) -> Result<(), String> {
+        self.validate_graph()?;
         if let Some(policy) = &self.scheduling {
-            policy.validate()?;
-            for op in &self.operations {
-                if !policy.claims.contains_key(&op.method.operation) {
-                    return Err(format!(
-                        "E_SCHEDULING: missing claims for {}",
-                        op.method.operation
-                    ));
-                }
-            }
+            policy.indices(&self.operations)?;
         }
         Ok(())
     }
@@ -242,7 +240,7 @@ pub fn order(
         let plan = plans
             .get(test)
             .ok_or_else(|| format!("E_ROUTE_MISSING: execution plan {test}"))?;
-        plan.validate().map_err(|e| format!("{e}: {test}"))?;
+        let steps = plan.steps().map_err(|e| format!("{e}: {test}"))?;
         let action = execute
             .get(test)
             .ok_or_else(|| format!("E_ROUTE_MISSING: unique execute action for {test}"))?;
@@ -250,25 +248,23 @@ pub fn order(
             return Err(format!("E_EXECUTION_PLAN: {test} omits its execute action"));
         }
         let mut previous = None;
-        for id in &plan.operations {
-            let (timeout_seconds, output_limit_bytes) = plan
-                .operation_bounds
-                .get(id)
-                .map_or((plan.timeout_seconds, plan.output_limit_bytes), |bounds| {
-                    (bounds.timeout_seconds, bounds.output_limit_bytes)
-                });
+        for (id, bounds) in steps {
+            let timeout_seconds = bounds.timeout_seconds;
+            let output_limit_bytes = bounds.output_limit_bytes;
             let defs = methods
                 .get(id)
                 .ok_or_else(|| format!("E_ROUTE_MISSING: {id}"))?;
             if defs.len() != 1 || id == "validate.delta" {
                 return Err(format!("E_ROUTE_AMBIGUOUS: {id}"));
             }
-            let op = operations.entry(id.clone()).or_insert_with(|| Operation {
-                method: defs[0].clone(),
-                predecessors: BTreeSet::new(),
-                timeout_seconds,
-                output_limit_bytes,
-            });
+            let op = operations
+                .entry(id.to_owned())
+                .or_insert_with(|| Operation {
+                    method: defs[0].clone(),
+                    predecessors: BTreeSet::new(),
+                    timeout_seconds,
+                    output_limit_bytes,
+                });
             if op.timeout_seconds != timeout_seconds || op.output_limit_bytes != output_limit_bytes
             {
                 return Err(format!("E_PLAN_BOUNDS: inconsistent shared operation {id}"));
@@ -276,7 +272,7 @@ pub fn order(
             if let Some(p) = previous {
                 op.predecessors.insert(p);
             }
-            previous = Some(id.clone());
+            previous = Some(id.to_owned());
         }
         chosen.insert(test.clone(), plan.clone());
     }
@@ -366,15 +362,7 @@ fn prepare_inner(
     environment.remove(chrono_harness::process_fds::ENV);
     let (selected, mut operations) = order(selected, plans, methods, execute)?;
     if let Some(policy) = &scheduling {
-        policy.validate()?;
-        for op in &operations {
-            if !policy.claims.contains_key(&op.method.operation) {
-                return Err(format!(
-                    "E_SCHEDULING: missing claims for {}",
-                    op.method.operation
-                ));
-            }
-        }
+        policy.indices(&operations)?;
     }
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
     let mut tools = BTreeMap::new();
