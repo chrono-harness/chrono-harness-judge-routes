@@ -762,6 +762,8 @@ mod impact;
 #[cfg(not(verus_keep_ghost))]
 pub mod plan_query;
 #[cfg(not(verus_keep_ghost))]
+mod registration;
+#[cfg(not(verus_keep_ghost))]
 pub mod selection;
 #[cfg(not(verus_keep_ghost))]
 pub mod source_plan;

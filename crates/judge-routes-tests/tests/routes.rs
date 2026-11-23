@@ -5,6 +5,26 @@ use std::{collections::BTreeMap, fs, os::unix::fs::symlink};
 
 const TOOL: &str = env!("CARGO_BIN_EXE_chrono-judge-routes-test-tool");
 
+// Only registration interprets project definitions. Supply its public response
+// at the command boundary and assert both original documents reach it.
+fn registry_reply<'a>(
+    input: &'a serde_json::Value,
+    methods: serde_json::Value,
+) -> impl FnOnce(&str, &serde_json::Value) -> Result<Vec<u8>, String> + 'a {
+    move |operation, request| {
+        assert_eq!(operation, "execution-declarations-v1");
+        assert_eq!(
+            request,
+            &json!({"filemap":input["filemap"],"projects":input["projects"]})
+        );
+        Ok(
+            json!({"plans":input["filemap"]["execution_plans"], "methods":{"Ok":methods}})
+                .to_string()
+                .into_bytes(),
+        )
+    }
+}
+
 fn declarations() -> serde_json::Value {
     json!([{"id":"routes-helper","program":TOOL,"version_argv":["--version"],"expected_version":"chrono-judge-routes-test-tool 0.1.0"}])
 }
@@ -253,7 +273,13 @@ fn explicit_shared_prerequisite_keeps_registered_test_contracts() {
         "timeout_seconds":600, "output_limit_bytes":1048576
     }});
     let query_routes = |input: &serde_json::Value| {
-        chrono_judge_routes::plan_query::full_operations(input.to_string().as_bytes())
+        chrono_judge_routes::plan_query::full_operations_with(
+            input.to_string().as_bytes(),
+            registry_reply(
+                input,
+                serde_json::from_str(include_str!("fixtures/shared-methods.json")).unwrap(),
+            ),
+        )
     };
     let result = query_routes(&query).unwrap();
     let operations: Vec<chrono_judge_routes::Operation> =
@@ -773,7 +799,13 @@ fn collection_query_replays_only_the_unique_registered_terminal_operation() {
         "operation":"run.example","tool":"python","argv":["{candidate}"]}}}]},
         "test_operations":{"test:example":["run.example"]},"environment":{"MODE":"offline"}});
     let replay = |data: &serde_json::Value| {
-        chrono_judge_routes::plan_query::collection_plan(data.to_string().as_bytes())
+        chrono_judge_routes::plan_query::collection_plan_with(
+            data.to_string().as_bytes(),
+            registry_reply(
+                data,
+                json!({"run.example": [{"owner": "script:example", "operation": "run.example", "tool": "python", "argv": ["{candidate}"]}]}),
+            ),
+        )
     };
     let result = replay(&query).unwrap();
     assert_eq!(result["operations"][0]["method"]["argv"], json!(["fixed"]));
@@ -811,7 +843,13 @@ fn unit_declarations_bind_only_owned_methods_to_the_original_candidate() {
             "actions":{"execute":{"operation":id,"tool":"example","argv":["{candidate}"]}}}));
     }
     let read = |q: &serde_json::Value| {
-        chrono_judge_routes::plan_query::unit_declarations(q.to_string().as_bytes())
+        chrono_judge_routes::plan_query::unit_declarations_with(
+            q.to_string().as_bytes(),
+            registry_reply(
+                q,
+                json!({"a": [{"owner": "script:a", "operation": "a", "tool": "example", "argv": ["{candidate}"]}], "b": [{"owner": "script:b", "operation": "b", "tool": "example", "argv": ["{candidate}"]}]}),
+            ),
+        )
     };
     let declarations = read(&q).unwrap();
     assert_eq!(
@@ -904,7 +942,13 @@ fn full_scheduling_validates_even_unselected_assignments_and_collection_replays_
         },"shared_operations":{}}
     });
     let read = |input: &serde_json::Value| {
-        chrono_judge_routes::plan_query::full_operations(input.to_string().as_bytes())
+        chrono_judge_routes::plan_query::full_operations_with(
+            input.to_string().as_bytes(),
+            registry_reply(
+                input,
+                json!({"run.a": [{"owner": "script:a", "operation": "run.a", "tool": "a", "argv": ["{candidate}"]}], "run.b": [{"owner": "script:b", "operation": "run.b", "tool": "b", "argv": []}]}),
+            ),
+        )
     };
     let scheduled = read(&query).unwrap();
     assert_eq!(scheduled["required_units"], json!(["alpha"]));
