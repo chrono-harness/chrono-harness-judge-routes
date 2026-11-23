@@ -64,15 +64,47 @@ struct Collection {
     environment: BTreeMap<String, String>,
 }
 
+#[derive(Deserialize)]
+struct Declarations {
+    plans: BTreeMap<String, execution::Plan>,
+    methods: Result<BTreeMap<String, Vec<execution::Method>>, String>,
+}
+
+fn declarations(
+    filemap: Value,
+    projects: Value,
+    read: impl FnOnce(&str, &Value) -> Result<Vec<u8>, String>,
+) -> Result<Declarations, String> {
+    let response = read(
+        "execution-declarations-v1",
+        &json!({"filemap":filemap,"projects":projects}),
+    )?;
+    serde_json::from_slice(&response)
+        .map_err(|e| format!("invalid registration execution declarations: {e}"))
+}
+
+fn installed(operation: &str, input: &Value) -> Result<Vec<u8>, String> {
+    let root = std::env::current_dir().map_err(|e| e.to_string())?;
+    crate::registration::query(&root, operation, input)
+}
+
 /// Reconstruct the global declaration plan at its original coordinates.
 pub fn collection_plan(input: impl Read) -> Result<Value, String> {
+    collection_plan_with(input, installed)
+}
+
+pub fn collection_plan_with(
+    input: impl Read,
+    read: impl FnOnce(&str, &Value) -> Result<Vec<u8>, String>,
+) -> Result<Value, String> {
     let q: Collection = serde_json::from_reader(input).map_err(|e| e.to_string())?;
+    let declared = declarations(q.filemap, q.projects, read)?;
     let plan = crate::prepare_collection(
         &q.root,
         q.binding,
         &q.selected,
-        &execution::plans(&q.filemap)?,
-        &execution::methods(&q.projects)?,
+        &declared.plans,
+        &declared.methods?,
         &unique_actions(q.test_operations),
         q.environment,
     )?;
@@ -81,6 +113,13 @@ pub fn collection_plan(input: impl Read) -> Result<Value, String> {
 
 /// Plan the full CI obligations from the interpreted endpoint, without running tools.
 pub fn full_operations(input: impl Read) -> Result<Value, String> {
+    full_operations_with(input, installed)
+}
+
+pub fn full_operations_with(
+    input: impl Read,
+    read: impl FnOnce(&str, &Value) -> Result<Vec<u8>, String>,
+) -> Result<Value, String> {
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
     struct Query {
@@ -91,7 +130,8 @@ pub fn full_operations(input: impl Read) -> Result<Value, String> {
         execution_units: Option<Value>,
     }
     let query: Query = serde_json::from_reader(input).map_err(|error| error.to_string())?;
-    let plans = execution::plans(&query.filemap)?;
+    let declared = declarations(query.filemap, query.projects, read)?;
+    let plans = declared.plans;
     let required_units = query
         .execution_units
         .as_ref()
@@ -100,7 +140,7 @@ pub fn full_operations(input: impl Read) -> Result<Value, String> {
             Ok::<_, String>(chrono_harness::units::required(&units, &query.selected))
         })
         .transpose()?;
-    let methods = execution::methods(&query.projects)?;
+    let methods = declared.methods?;
     let (selected, operations) = crate::order(
         &query.selected,
         &plans,
@@ -115,6 +155,13 @@ pub fn full_operations(input: impl Read) -> Result<Value, String> {
 
 /// Rebuild the global operation graph and a unit's expanded operations at its original coordinates.
 pub fn unit_declarations(input: impl Read) -> Result<Value, String> {
+    unit_declarations_with(input, installed)
+}
+
+pub fn unit_declarations_with(
+    input: impl Read,
+    read: impl FnOnce(&str, &Value) -> Result<Vec<u8>, String>,
+) -> Result<Value, String> {
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
     struct Query {
@@ -131,8 +178,9 @@ pub fn unit_declarations(input: impl Read) -> Result<Value, String> {
         return Err("E_UNIT_ASSIGNMENT: unit selection exceeds global selection".into());
     }
     let binding = crate::binding(&q.request, &q.effective_inputs);
-    let plans = execution::plans(&q.filemap)?;
-    let methods = execution::methods(&q.projects)?;
+    let declared = declarations(q.filemap, q.projects, read)?;
+    let plans = declared.plans;
+    let methods = declared.methods?;
     let actions = unique_actions(q.test_operations);
     let (chosen, ordered) = crate::order(&q.global, &plans, &methods, &actions)?;
     let (selected, mut operations) = crate::order(&q.unit, &plans, &methods, &actions)?;

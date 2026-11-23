@@ -38,3 +38,5 @@ projects 在宿主选定的 routes 发行上使用以下查询。每个查询从
 scoped CI 可向 `prepare-scoped-plan-v1` 提供原始报告的宿主相对路径 `report_path`，在 `binding` 中提供原请求字段及字符串 `run`。routes 从报告路径与运行身份生成 `operation_state`。收集时向 `check-scoped-plan-v1` 提交 `{plan, binding, report_path}`；它校验原计划身份与整份绑定，成功返回 `{"plan":"<identity>"}`。
 
 `global-selection` 和 `collected-selection-v1` 通过 PATH 上已安装的 `chrono-judge-registration test-retirements-v1` 解释两个端点。文档模式传入固定登记，收集模式传入原封存请求和迁移原件。routes 按输入顺序处理各退役决定，对替代测试和 FILEMAP 的测试取并集。
+
+`collection-plan-v1`、`full-operations-v1` 和 `unit-declarations-v1` 把收到的 FILEMAP 和项目文档原样交给宿主选定的 `chrono-judge-registration execution-declarations-v1`。routes 使用返回的计划和方法验证单元归属、合并共享操作并展开参数。收集计划仍按原执行目录重建，登记程序从本次检出的 PATH 解析。
