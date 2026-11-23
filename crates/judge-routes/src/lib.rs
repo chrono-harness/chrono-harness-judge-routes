@@ -64,7 +64,6 @@ use serde_json::{Value, json};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
-    io::Read,
     path::{Path, PathBuf},
 };
 
@@ -629,65 +628,8 @@ pub struct Receipt {
     pub digest: String,
 }
 
-/// UTF-8 路径、File::open、Read::take 和 read_to_end 的字节获取适配；
-/// 不选择操作、不准入路径、不解释依赖内容，也不分类领域状态。
-#[cfg(not(verus_keep_ghost))]
-struct DependencyIo<'a>(&'a Path);
-#[cfg(not(verus_keep_ghost))]
-impl chrono_harness::verified_verifier::sources::DependencyRead for DependencyIo<'_> {
-    fn read(&self, path: &[u8], limit: u64) -> Result<Vec<u8>, String> {
-        std::str::from_utf8(path)
-            .map_err(|e| e.to_string())
-            .and_then(|path| fs::File::open(self.0.join(path)).map_err(|e| e.to_string()))
-            .and_then(|file| {
-                let mut bytes = Vec::new();
-                file.take(limit)
-                    .read_to_end(&mut bytes)
-                    .map(|_| bytes)
-                    .map_err(|e| e.to_string())
-            })
-    }
-}
-
-#[cfg(not(verus_keep_ghost))]
-impl chrono_harness::verified_verifier::ArtifactRead for DependencyIo<'_> {
-    fn identity(&self, path: &[u8]) -> Result<(Vec<u8>, u64), String> {
-        std::str::from_utf8(path)
-            .map_err(|e| e.to_string())
-            .and_then(|path| chrono_harness::no_symlink_parents(self.0, path))
-            .and_then(|path| chrono_harness::file_identity(&path))
-            .map(|(digest, length)| (digest.into_bytes(), length))
-    }
-}
-
 #[cfg(not(verus_keep_ghost))]
 impl Receipt {
-    pub fn new(plan: &Execution, op: &Operation, process: ProcessResult) -> Result<Self, String> {
-        let mut receipt = Self {
-            plan: plan.identity.clone(),
-            operation: op.method.operation.clone(),
-            method: wire::digest(&op.method)?,
-            compiler_dependency: chrono_harness::verified_verifier::sources::observe_dependency(
-                &op.method.output_contract,
-                &op.method.argv,
-                process.exit_code,
-                process.failure.is_some(),
-                op.output_limit_bytes,
-                &DependencyIo(&plan.root),
-            ),
-            compiler_artifact: chrono_harness::verified_verifier::observe_artifact(
-                &op.method.output_contract,
-                &op.method.argv,
-                process.exit_code,
-                process.failure.is_some(),
-                &DependencyIo(&plan.root),
-            ),
-            process,
-            digest: String::new(),
-        };
-        receipt.digest = receipt.identity()?;
-        Ok(receipt)
-    }
     fn identity(&self) -> Result<String, String> {
         let mut v = serde_json::to_value(self).map_err(|e| e.to_string())?;
         v.as_object_mut().unwrap().remove("digest");

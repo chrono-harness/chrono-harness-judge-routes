@@ -27,9 +27,33 @@ fn p(ops: &[&str]) -> Plan {
     }
 }
 
-/// 核真实文件 IO、原进程和回执往返；夹具报告不代表实际 Verus 证明。
+// Supply the public receipt a project executor would send. File observation belongs to projects.
+fn original_receipt(
+    plan: &chrono_judge_routes::Execution,
+    op: &chrono_judge_routes::Operation,
+    process: chrono_harness::ProcessResult,
+) -> Receipt {
+    let mut receipt = Receipt {
+        plan: plan.identity.clone(),
+        operation: op.method.operation.clone(),
+        method: wire::digest(&op.method).unwrap(),
+        process,
+        compiler_dependency: None,
+        compiler_artifact: None,
+        digest: String::new(),
+    };
+    seal(&mut receipt);
+    receipt
+}
+
+fn seal(receipt: &mut Receipt) {
+    let mut fields = serde_json::to_value(&*receipt).unwrap();
+    fields.as_object_mut().unwrap().remove("digest");
+    receipt.digest = wire::digest(&fields).unwrap();
+}
+
 #[test]
-fn compiler_receipt_observes_original_library_and_preserves_io_failure() {
+fn compiler_receipts_are_checked_offline_with_the_original_io_outcome() {
     let directory = tempfile::tempdir().unwrap();
     let root = directory.path();
     let args: Vec<String> = [
@@ -78,74 +102,25 @@ fn compiler_receipt_observes_original_library_and_preserves_io_failure() {
         timeout_seconds: 10,
         output_limit_bytes: 4096,
     };
-    let run = || run_process_observed(root, &command, &[], &tool.sha256).unwrap();
-
-    let missing = Receipt::new(&plan, op, run()).unwrap();
-    assert_eq!(missing.process.exit_code, 0);
-    assert!(missing.compiler_dependency.as_ref().unwrap().is_ok());
-    assert!(missing.compiler_artifact.as_ref().unwrap().is_err());
+    let process = run_process_observed(root, &command, &[], &tool.sha256).unwrap();
+    let mut retained = original_receipt(&plan, op, process);
+    retained.compiler_dependency = Some(Ok(b"original dependency bytes".to_vec()));
+    retained.compiler_artifact = Some(Err("original artifact was missing".into()));
+    seal(&mut retained);
     assert!(
-        compare(&plan, op, Some(&missing))
+        compare(&plan, op, Some(&retained))
             .unwrap_err()
             .starts_with("E_VERUS_ARTIFACT:")
     );
-
-    // 大于 stdout 限额的库也按实际长度流式计算摘要，不复制进报告。
-    let content = vec![255u8; 65537];
-    fs::write(root.join("library.fixture"), &content).unwrap();
-    let original = Receipt::new(&plan, op, run()).unwrap();
-    let artifact = original
-        .compiler_artifact
-        .as_ref()
-        .unwrap()
-        .as_ref()
-        .unwrap();
-    assert_eq!(artifact.path, b"library out.rlib");
-    assert_eq!(artifact.sha256, sha256(&content).as_bytes());
-    assert_eq!(artifact.length, content.len() as u64);
-    let query = json!({"plan":plan,"operation":op.method.operation,"process":original.process});
-    let record = |dir: &std::path::Path, input: &serde_json::Value| {
-        chrono_judge_routes::plan_query::record_operation(dir, input.to_string().as_bytes())
-    };
-    let mut published = record(root, &query).unwrap();
-    assert!(
-        published
-            .as_object_mut()
-            .unwrap()
-            .remove("error")
-            .unwrap()
-            .is_null()
-    );
-    assert!(published.get("process").is_none());
-    published["process"] = query["process"].clone();
-    assert_eq!(published, json!(original));
-    assert!(
-        record(root.parent().unwrap(), &query)
-            .unwrap_err()
-            .contains("checkout differs")
-    );
-    let mut wrong_plan = query.clone();
-    wrong_plan["plan"]["identity"] = json!("other");
-    assert_eq!(record(root, &wrong_plan).unwrap_err(), "E_PLAN_IDENTITY");
-    let mut wrong_operation = query.clone();
-    wrong_operation["operation"] = json!("absent");
-    assert!(
-        record(root, &wrong_operation)
-            .unwrap_err()
-            .contains("absent from plan")
-    );
-    let mut failed = query.clone();
-    failed["process"]["exit_code"] = json!(9);
-    let observed = record(root, &failed).unwrap();
-    assert!(observed["compiler_dependency"]["Err"].is_string());
-    assert!(observed["error"].is_string());
-    let encoded = serde_json::to_vec(&original).unwrap();
-    assert!(encoded.len() < content.len());
-    let retained: Receipt = serde_json::from_slice(&encoded).unwrap();
-    // 离线消费原身份，不要求编译输出仍在，也不补读／覆盖原 IO 失败。
-    fs::remove_file(root.join("library out.rlib")).unwrap();
+    let bytes = vec![255u8; 65537];
+    retained.compiler_artifact = Some(Ok(chrono_harness::verified_verifier::CompiledArtifact {
+        path: b"library out.rlib".to_vec(),
+        sha256: sha256(&bytes).into_bytes(),
+        length: bytes.len() as u64,
+    }));
+    seal(&mut retained);
+    assert!(!root.join("library out.rlib").exists());
     compare(&plan, op, Some(&retained)).unwrap();
-    assert!(compare(&plan, op, Some(&missing)).is_err());
 
     for field in ["path", "sha256", "length"] {
         let mut changed = retained.clone();
@@ -169,18 +144,6 @@ fn compiler_receipt_observes_original_library_and_preserves_io_failure() {
                 .starts_with("E_VERUS_ARTIFACT:")
         );
     }
-
-    fs::write(root.join("library.fixture"), []).unwrap();
-    let empty = Receipt::new(&plan, op, run()).unwrap();
-    assert!(empty.compiler_artifact.as_ref().unwrap().is_err());
-    assert!(compare(&plan, op, Some(&empty)).is_err());
-    fs::remove_file(root.join("library out.rlib")).unwrap();
-    fs::remove_file(root.join("library.fixture")).unwrap();
-    fs::write(root.join("actual-library"), b"actual").unwrap();
-    symlink("actual-library", root.join("library out.rlib")).unwrap();
-    let linked = Receipt::new(&plan, op, run()).unwrap();
-    assert!(linked.compiler_artifact.as_ref().unwrap().is_err());
-    assert!(compare(&plan, op, Some(&linked)).is_err());
 }
 #[test]
 fn shared_prerequisites_order_and_dedup() {
@@ -459,7 +422,7 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
     assert_eq!(data[1], json!(plan.root));
     assert_eq!(data[2], "");
     assert!(data[3].is_null());
-    let receipt = Receipt::new(&plan, op, process).unwrap();
+    let receipt = original_receipt(&plan, op, process);
     let evidence = |plan: &serde_json::Value, receipts: serde_json::Value| {
         let bytes = serde_json::to_vec(&json!({"plan":plan,"receipts":receipts})).unwrap();
         chrono_judge_routes::plan_query::check_plan_receipts(bytes.as_slice())
@@ -537,7 +500,7 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
                 process.stderr_sha256 = sha256(&process.stderr_bytes);
             }
         }
-        let sealed = Receipt::new(&plan, op, process).unwrap();
+        let sealed = original_receipt(&plan, op, process);
         assert!(
             compare(&plan, op, Some(&sealed)).is_err(),
             "resealed wrong observation mode {mode}"
@@ -647,7 +610,7 @@ fn path_shadow_cannot_replace_bound_invocation_and_bytes_are_rechecked() {
     let actual = run_process_observed(dir.path(), &spec, &[], &tool.sha256).unwrap();
     assert_eq!(actual.exit_code, 0);
     assert_eq!(actual.stdout, "bound-rust\n");
-    let receipt = Receipt::new(&plan, op, actual).unwrap();
+    let receipt = original_receipt(&plan, op, actual);
     assert!(
         compare(&plan, op, Some(&receipt)).is_err(),
         "changed effective PATH cannot use old receipt binding"

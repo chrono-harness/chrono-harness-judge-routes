@@ -8,7 +8,6 @@ fn main() -> std::process::ExitCode {
         | "plan-context-v1"
         | "collection-plan-v1"
         | "unit-declarations-v1"
-        | "record-operation-v1"
         | "retained-tool-v1"
         | "check-plan-v1"),
     ) = name.as_deref().and_then(std::ffi::OsStr::to_str)
@@ -34,9 +33,6 @@ fn main() -> std::process::ExitCode {
                 let reply = match command {
                     "check-plan-receipts-v1" => plan_query::check_plan_receipts(input),
                     "plan-context-v1" => plan_query::plan_context(input),
-                    "record-operation-v1" => std::env::current_dir()
-                        .map_err(|e| e.to_string())
-                        .and_then(|root| plan_query::record_operation(&root, input)),
                     "retained-tool-v1" => plan_query::retained_tool(input),
                     "check-plan-v1" => plan_query::check_plan(input),
                     "unit-declarations-v1" => plan_query::unit_declarations(input),
