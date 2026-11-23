@@ -12,6 +12,7 @@ fn main() -> std::process::ExitCode {
         | "unit-declarations-v1"
         | "retained-tool-v1"
         | "check-plan-v1"
+        | "check-scoped-plan-v1"
         | "scoped-operations-v1"
         | "prepare-scoped-plan-v1"),
     ) = name.as_deref().and_then(std::ffi::OsStr::to_str)
@@ -46,6 +47,7 @@ fn main() -> std::process::ExitCode {
                     "prepare-scoped-plan-v1" => std::env::current_dir()
                         .map_err(|e| e.to_string())
                         .and_then(|root| plan_query::prepare_scoped_plan(&root, input)),
+                    "check-scoped-plan-v1" => plan_query::check_scoped_plan(input),
                     "check-plan-v1" => plan_query::check_plan(input),
                     "unit-declarations-v1" => plan_query::unit_declarations(input),
                     _ => plan_query::collection_plan(input),

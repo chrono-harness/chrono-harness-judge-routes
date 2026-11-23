@@ -34,3 +34,5 @@ projects 在宿主选定的 routes 发行上使用以下查询。每个查询从
 完整和限定范围的 CI 可以调用 `source-plan-v1` 核对源码证明计划。stdin 提供解释后的 `previous`（初始提交为 null）和 `candidate`，每个端点含固定 `commit`、`filemap`、`projects` 和产物目录 `artifacts`。另传受影响的节点 `affected`、登记方法 `methods` 和有序 `operations`。已绑定 Git 的调用方传入 `git.config` 和原读者的 `git.git_facts`（可略去进程数组）；旧式未绑定读者传 null。
 
 在宿主检出中执行查询。需要连续性证据时，工具从固定提交实际观察树和文件，按配置核对 Git 工具及环境。空路径集可完全在内存中核对。stdout 的 `previous`、`candidate` 标识所查提交，`git_facts` 保存本次读者产生的观察。调用方必须处理 `error`，null 表示当前计划通过，字符串保留原始拒绝原因。请求无法解码或提交格式无效时退出 2。
+
+scoped CI 可向 `prepare-scoped-plan-v1` 提供原始报告的宿主相对路径 `report_path`，在 `binding` 中提供原请求字段及字符串 `run`。routes 从报告路径与运行身份生成 `operation_state`。收集时向 `check-scoped-plan-v1` 提交 `{plan, binding, report_path}`；它校验原计划身份与整份绑定，成功返回 `{"plan":"<identity>"}`。
