@@ -43,7 +43,7 @@ jobs:
         with:
           version: 2026.11.12
           cache: false
-          install_args: http:chrono-judge-registration
+          install_args: http:chrono-harness http:chrono-judge-registration
       - name: Build and exercise the release binary
         shell: bash
         env:
