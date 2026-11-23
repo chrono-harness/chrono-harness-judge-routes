@@ -1,8 +1,13 @@
 fn main() -> std::process::ExitCode {
     let mut args = std::env::args_os().skip(1);
     let name = args.next();
+    if name.as_deref().and_then(std::ffi::OsStr::to_str) == Some("--version") && args.len() == 0 {
+        println!("chrono-judge-routes {}", env!("CARGO_PKG_VERSION"));
+        return std::process::ExitCode::SUCCESS;
+    }
     if let Some(
-        operation @ ("global-selection"
+        operation @ ("evaluate-routes-v1"
+        | "global-selection"
         | "collected-selection-v1"
         | "check-plan-receipts-v1"
         | "check-operation-receipt-v1"
@@ -38,6 +43,7 @@ fn main() -> std::process::ExitCode {
                 use chrono_judge_routes::plan_query;
                 use std::io::Write;
                 let reply = match command {
+                    "evaluate-routes-v1" => chrono_judge_routes::judge(input),
                     "check-operation-receipt-v1" => plan_query::check_operation_receipt(input),
                     "check-plan-receipts-v1" => plan_query::check_plan_receipts(input),
                     "plan-context-v1" => plan_query::plan_context(input),
@@ -71,9 +77,24 @@ fn main() -> std::process::ExitCode {
             }
         };
     }
-    std::process::ExitCode::from(chrono_harness::wire::judge_main(
-        "chrono-judge-routes",
-        env!("CARGO_PKG_VERSION"),
-        chrono_judge_routes::judge,
-    ))
+    use std::os::unix::process::CommandExt;
+    let program = match std::env::current_exe() {
+        Ok(program) => program,
+        Err(error) => {
+            eprintln!("{error}");
+            return 2.into();
+        }
+    };
+    let error = std::process::Command::new("chrono-harness")
+        .args([
+            "judge-command-v1",
+            "chrono-judge-routes",
+            env!("CARGO_PKG_VERSION"),
+        ])
+        .arg(program)
+        .args(["evaluate-routes-v1", "E_ROUTES", "--inherited"])
+        .args(std::env::args_os().skip(1))
+        .exec();
+    eprintln!("start chrono-harness judge-command-v1: {error}");
+    2.into()
 }

@@ -1,86 +1,16 @@
-//! Check proof obligations using the original registration views and fixed Git endpoints.
-use crate::{Method, Operation, validate_proof_plan};
-use chrono_harness::{facts, verified_verifier::sources};
-use serde::Deserialize;
+//! Project route declarations onto the verifier's fixed-endpoint coverage query.
+use crate::{Method, Operation};
+use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::{collections::BTreeMap, io::Read, path::Path};
 
-impl crate::verified_source_pipeline::InventoryPath for sources::SourceFile {
-    fn path(&self) -> &str {
-        &self.path
-    }
-}
-
-pub(super) type EndpointData<'a> = (&'a str, &'a Value, &'a Value, Vec<String>);
-
-pub(super) fn validate<'a>(
-    previous: Option<EndpointData<'a>>,
-    current: EndpointData<'a>,
-    affected: &Vec<String>,
-    methods: &BTreeMap<String, Vec<Method>>,
-    operations: &[Operation],
-    observe: impl FnOnce(
-        Option<EndpointData<'a>>,
-        EndpointData<'a>,
-        &Vec<String>,
-    ) -> Result<sources::continuity::Continuity, String>,
-) -> Result<(), String> {
-    let baseline = previous
-        .as_ref()
-        .map(|endpoint| serde_json::from_value(endpoint.1.clone()))
-        .transpose()
-        .map_err(|error| error.to_string());
-    let registry: sources::SourceRegistry =
-        serde_json::from_value(current.1.clone()).map_err(|error| error.to_string())?;
-    let paths = crate::verified_source_pipeline::continuity_paths(
-        &registry.files.entries,
-        registry.files.require_new_file_classification,
-        affected,
-    );
-    crate::verified_source_pipeline::with_source_continuity(
-        (),
-        previous,
-        current,
-        &paths,
-        |state, previous, current, paths| (state, observe(previous, current, paths)),
-        |state, continuity| {
-            (
-                state,
-                validate_proof_plan(
-                    &registry,
-                    baseline
-                        .as_ref()
-                        .map(Option::as_ref)
-                        .map_err(String::as_str),
-                    &affected.iter().cloned().collect(),
-                    methods,
-                    operations,
-                    &continuity,
-                ),
-            )
-        },
-    )
-    .1
-}
-
-#[derive(Deserialize)]
+#[derive(Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
-struct Endpoint {
-    commit: String,
-    filemap: Value,
-    projects: Value,
-    artifacts: Vec<String>,
-}
-
-impl Endpoint {
-    fn view(&self) -> EndpointData<'_> {
-        (
-            &self.commit,
-            &self.filemap,
-            &self.projects,
-            self.artifacts.clone(),
-        )
-    }
+pub(super) struct Endpoint {
+    pub commit: String,
+    pub filemap: Value,
+    pub projects: Value,
+    pub artifacts: Vec<String>,
 }
 
 #[derive(Deserialize)]
@@ -89,7 +19,6 @@ struct GitBinding {
     config: String,
     git_facts: Value,
 }
-
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Query {
@@ -101,39 +30,62 @@ struct Query {
     git: Option<GitBinding>,
 }
 
-pub fn query(root: &Path, input: impl Read) -> Result<Value, String> {
-    let q: Query = serde_json::from_reader(input).map_err(|error| error.to_string())?;
-    facts::full_oid(&q.candidate.commit)?;
-    if let Some(previous) = &q.previous {
-        facts::full_oid(&previous.commit)?;
+pub(super) fn coverage(
+    root: &Path,
+    previous: Option<&Endpoint>,
+    candidate: &Endpoint,
+    affected: &[String],
+    methods: &BTreeMap<String, Vec<Method>>,
+    operations: &[Operation],
+    git: Value,
+) -> Result<Value, String> {
+    let scopes: Vec<_> = methods
+        .values()
+        .flatten()
+        .map(|m| {
+            json!({
+                "operation":m.operation,"owner":m.owner,"tool":m.tool
+            })
+        })
+        .collect();
+    let invocations: Vec<_> = operations.iter().map(|op| json!({
+        "operation":op.method.operation,"argv":op.method.argv,"output_contract":op.method.output_contract,
+        "output_limit_bytes":op.output_limit_bytes
+    })).collect();
+    let input = json!({"previous":previous, "candidate":candidate, "affected":affected,
+        "scopes":scopes, "invocations":invocations, "git":git});
+    let bytes = crate::registration::runner(root, "source-coverage-v1", &input)?;
+    let reply: Reply = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
+    if reply.candidate != candidate.commit || reply.previous.as_ref() != previous.map(|e| &e.commit)
+    {
+        return Err("E_GIT_FACTS: source coverage endpoint identity mismatch".into());
     }
-    let mut observation = Value::Null;
-    let result = validate(
-        q.previous.as_ref().map(Endpoint::view),
-        q.candidate.view(),
+    serde_json::to_value(reply).map_err(|e| e.to_string())
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Reply {
+    previous: Option<String>,
+    candidate: String,
+    git_facts: Value,
+    error: Option<String>,
+}
+
+pub fn query(root: &Path, input: impl Read) -> Result<Value, String> {
+    let q: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;
+    let git = match q.git {
+        None => json!({"mode":"legacy"}),
+        Some(binding) => json!({"mode":"observed","config":binding.config,
+            "observations":{"environment":binding.git_facts["environment"],"git_facts":binding.git_facts}}),
+    };
+    coverage(
+        root,
+        q.previous.as_ref(),
+        &q.candidate,
         &q.affected,
         &q.methods,
         &q.operations,
-        |previous, candidate, paths| {
-            if paths.is_empty() {
-                return Ok(sources::continuity::Continuity::empty());
-            }
-            let reader = match &q.git {
-                None => facts::Reader::legacy(),
-                Some(binding) => facts::Reader::from_observations(
-                    root,
-                    &binding.config,
-                    candidate.0,
-                    &json!({"git_facts":binding.git_facts,"environment":binding.git_facts["environment"]}),
-                )?,
-            };
-            let result = sources::continuity::observe(&reader, root, previous, candidate, paths);
-            observation = reader.observation();
-            result
-        },
-    );
-    Ok(
-        json!({"previous": q.previous.as_ref().map(|e| &e.commit), "candidate":q.candidate.commit,
-        "git_facts":observation, "error":result.err()}),
+        git,
     )
 }

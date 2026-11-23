@@ -1,7 +1,7 @@
 //! Read and replay route evidence without executing operations or acquiring tools.
 use crate::declarations as execution;
+use crate::protocol::Request;
 use crate::{Execution, Method, Receipt, compare_validated, unique_actions};
-use chrono_harness::wire::Request;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
@@ -41,7 +41,7 @@ pub fn check_operation_receipt(input: impl Read) -> Result<Value, String> {
         root: PathBuf,
         environment: BTreeMap<String, String>,
         operation: crate::Operation,
-        tool: Option<chrono_harness::observation::Tool>,
+        tool: Option<crate::Tool>,
         receipt: Option<Receipt>,
     }
     let q: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;
@@ -72,8 +72,8 @@ pub fn plan_context(input: impl Read) -> Result<Value, String> {
     let expanded: BTreeMap<_, _> = query
         .templates
         .into_iter()
-        .map(|(id, argv)| (id, crate::expand(&argv, &binding)))
-        .collect();
+        .map(|(id, argv)| Ok((id, crate::expand(&argv, &binding)?)))
+        .collect::<Result<_, String>>()?;
     Ok(json!({"request_id":query.request.request_id,"binding":binding,"expanded":expanded}))
 }
 
@@ -162,7 +162,7 @@ pub fn full_operations_with(
         .as_ref()
         .map(|block| {
             let units = crate::validate_unit_assignments(block, &plans)?;
-            Ok::<_, String>(chrono_harness::units::required(&units, &query.selected))
+            Ok::<_, String>(crate::units::required(&units, &query.selected))
         })
         .transpose()?;
     let methods = declared.methods?;
@@ -210,7 +210,7 @@ pub fn unit_declarations_with(
     let (chosen, ordered) = crate::order(&q.global, &plans, &methods, &actions)?;
     let (selected, mut operations) = crate::order(&q.unit, &plans, &methods, &actions)?;
     for operation in &mut operations {
-        operation.method.argv = crate::expand(&operation.method.argv, &binding);
+        operation.method.argv = crate::expand(&operation.method.argv, &binding)?;
     }
     Ok(json!({
         "request_id":q.request.request_id, "binding":binding,
@@ -224,7 +224,7 @@ pub fn retained_tool(input: impl Read) -> Result<Value, String> {
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
     struct Query {
-        tool: chrono_harness::observation::Tool,
+        tool: crate::Tool,
         program: String,
         version_argv: Vec<String>,
         environment: BTreeMap<String, String>,
@@ -260,7 +260,7 @@ pub fn dispatch_plan(input: impl Read) -> Result<Value, String> {
 /// Expand the caller's scoped request fields using the same original-directory
 /// convention as the full planner.
 fn scoped_binding(mut binding: Value, report_path: &str) -> Result<Value, String> {
-    chrono_harness::relative_path(report_path)?;
+    crate::declarations::relative_path(report_path)?;
     let fields = binding
         .as_object_mut()
         .ok_or("E_PLAN_BINDING: expected scoped request fields")?;
@@ -323,7 +323,7 @@ pub fn scoped_operations(input: impl Read) -> Result<Value, String> {
     )?;
     if let Some(binding) = q.binding {
         for op in &mut operations {
-            op.method.argv = crate::expand(&op.method.argv, &binding);
+            op.method.argv = crate::expand(&op.method.argv, &binding)?;
         }
     }
     Ok(json!({"selected": selected, "operations": operations}))
@@ -338,7 +338,7 @@ pub fn prepare_scoped_plan(root: &std::path::Path, input: impl Read) -> Result<V
         report_path: Option<String>,
         declarations: Value,
         environment: BTreeMap<String, String>,
-        reused: BTreeMap<String, chrono_harness::observation::Tool>,
+        reused: BTreeMap<String, crate::Tool>,
         scheduling: Option<execution::Scheduling>,
     }
     let q: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;

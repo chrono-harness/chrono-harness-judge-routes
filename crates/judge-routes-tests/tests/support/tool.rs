@@ -1,22 +1,9 @@
-#![allow(unexpected_cfgs)]
-#[cfg(not(verus_keep_ghost))]
-use verus_builtin_macros::verus;
-#[cfg(verus_keep_ghost)]
-use vstd::prelude::*;
-
-verus! {
-/// The mock may write only when both compiler destination declarations agree.
-pub fn accepts_output(argument_count: usize, output_flag: bool, emit_matches: bool) -> (valid: bool)
-    ensures valid == (argument_count == 12 && output_flag && emit_matches),
-{
+// Compiler mock writes only when both declared destinations agree.
+fn accepts_output(argument_count: usize, output_flag: bool, emit_matches: bool) -> bool {
     argument_count == 12 && output_flag && emit_matches
 }
-}
-
-#[cfg(not(verus_keep_ghost))]
 use std::{env, fs, fs::OpenOptions, io::Write, path::Path};
 
-#[cfg(not(verus_keep_ghost))]
 fn version() {
     println!(
         "chrono-judge-routes-test-tool {}",
@@ -24,7 +11,6 @@ fn version() {
     );
 }
 
-#[cfg(not(verus_keep_ghost))]
 fn main() {
     let mut args = env::args().skip(1);
     match args.next().as_deref() {

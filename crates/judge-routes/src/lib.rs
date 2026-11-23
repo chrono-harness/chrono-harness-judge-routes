@@ -1,62 +1,21 @@
 #![allow(unexpected_cfgs)]
-#[cfg(verus_keep_ghost)]
-use super::source_verifier::{ProofInvocation, sources};
-#[cfg(not(verus_keep_ghost))]
-use chrono_harness::{
-    verified_verifier::{ProofInvocation, sources},
-    verus,
-};
-#[cfg(verus_keep_ghost)]
-use vstd::prelude::*;
-
-verus! {
-
-pub open spec fn source_plan_error(
-    registry: &sources::SourceRegistry,
-    previous: Result<Option<&sources::SourceRegistry>, &str>, nodes: Seq<String>,
-    methods: Seq<ProofInvocation>, scopes: Seq<sources::SourceMethodScope>,
-    evidence: &sources::continuity::Continuity,
-) -> Option<(Seq<char>, Seq<char>)> {
-    match sources::registry_classification_error(registry, previous, evidence) {
-        Some(error) => Some(error),
-        None => sources::selected_plan_error(registry.files.entries@, nodes, methods, scopes,
-            matches!(registry.files.require_new_file_classification, Some(true)), evidence, 0),
-    }
-}
-
-/// 库存先验，原错误优先；两个门使用同一固定库存、影响输入和连续性证据。
-pub fn validate_source_plan<'a>(
-    registry: &'a sources::SourceRegistry,
-    previous: Result<Option<&sources::SourceRegistry>, &'a str>, nodes: &Vec<String>,
-    methods: &Vec<ProofInvocation>, scopes: &Vec<sources::SourceMethodScope>,
-    evidence: &sources::continuity::Continuity,
-) -> (out: Result<(), sources::CoverageError<'a>>)
-    ensures match out {
-        Ok(()) => source_plan_error(registry, previous, nodes@, methods@, scopes@, evidence).is_none(),
-        Err(error) => source_plan_error(registry, previous, nodes@, methods@, scopes@, evidence) == Some(error.view()),
-    },
-{
-    let inventory = sources::validate_file_classifications(registry, previous, evidence);
-    verified_source_pipeline::after_inventory(inventory, || -> (result: Result<(), sources::CoverageError<'a>>)
-        ensures match result {
-            Ok(()) => sources::selected_plan_error(registry.files.entries@, nodes@, methods@, scopes@,
-                matches!(registry.files.require_new_file_classification, Some(true)), evidence, 0).is_none(),
-            Err(error) => sources::selected_plan_error(registry.files.entries@, nodes@, methods@, scopes@,
-                matches!(registry.files.require_new_file_classification, Some(true)), evidence, 0) == Some(error.view()),
-        },
-    { sources::validate_selected_roots(&registry.files, nodes, methods, scopes, evidence) })
-}
-
-} // verus!
-
 // Routes owns method planning and comparison with runner-produced observations.
 #[cfg(not(verus_keep_ghost))]
-use chrono_harness::{
-    ProcessResult, facts,
-    observation::{self, Tool},
-    wire::{self, Finding, Request, Response, Status},
-};
-#[cfg(not(verus_keep_ghost))]
+mod commands;
+pub mod evidence;
+mod units;
+pub use evidence::{CompiledArtifact, OutputContract, ProcessResult, Tool};
+pub mod protocol;
+use protocol::{Request, Scope};
+
+pub fn sha256(bytes: &[u8]) -> String {
+    use sha2::{Digest, Sha256};
+    format!("{:x}", Sha256::digest(bytes))
+}
+pub fn digest<T: serde::Serialize>(v: &T) -> Result<String, String> {
+    Ok(sha256(&serde_jcs::to_vec(v).map_err(|e| e.to_string())?))
+}
+
 mod declarations;
 #[cfg(not(verus_keep_ghost))]
 pub use declarations::{Plan, Scheduling};
@@ -81,7 +40,7 @@ pub struct Method {
     pub tool: String,
     pub argv: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub output_contract: Option<chrono_harness::verified_verifier::OutputContract>,
+    pub output_contract: Option<OutputContract>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -94,55 +53,6 @@ pub struct Operation {
     pub output_limit_bytes: usize,
 }
 
-/// 只借用现役计划字段；证明资格由同源 Verus 内核判断。
-#[cfg(not(verus_keep_ghost))]
-pub fn proof_invocations(
-    operations: &[Operation],
-) -> Vec<chrono_harness::verified_verifier::ProofInvocation<'_>> {
-    operations
-        .iter()
-        .map(
-            |operation| chrono_harness::verified_verifier::ProofInvocation {
-                operation: &operation.method.operation,
-                argv: &operation.method.argv,
-                output_contract: &operation.method.output_contract,
-                output_limit_bytes: operation.output_limit_bytes,
-            },
-        )
-        .collect()
-}
-
-/// JSON 和显式影响集合仅作投影；缺证明、参数或根不符由 Verus 拒绝。
-#[cfg(not(verus_keep_ghost))]
-pub fn validate_proof_plan(
-    registry: &chrono_harness::verified_verifier::sources::SourceRegistry,
-    previous: Result<Option<&chrono_harness::verified_verifier::sources::SourceRegistry>, &str>,
-    affected_nodes: &BTreeSet<String>,
-    methods: &BTreeMap<String, Vec<Method>>,
-    operations: &[Operation],
-    continuity: &chrono_harness::verified_verifier::sources::continuity::Continuity,
-) -> Result<(), String> {
-    let scopes = methods
-        .values()
-        .flatten()
-        .map(
-            |method| chrono_harness::verified_verifier::sources::SourceMethodScope {
-                operation: &method.operation,
-                owner: &method.owner,
-                tool: &method.tool,
-            },
-        )
-        .collect();
-    validate_source_plan(
-        registry,
-        previous,
-        &affected_nodes.iter().cloned().collect(),
-        &proof_invocations(operations),
-        &scopes,
-        continuity,
-    )
-    .map_err(|error| error.render(|message, path| format!("{message}{path}")))
-}
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 #[cfg(not(verus_keep_ghost))]
@@ -163,7 +73,7 @@ impl Execution {
     fn digest(&self) -> Result<String, String> {
         let mut value = serde_json::to_value(self).map_err(|e| e.to_string())?;
         value.as_object_mut().unwrap().remove("identity");
-        wire::digest(&value)
+        digest(&value)
     }
     fn validate_graph(&self) -> Result<(), String> {
         if self.schema != "chrono-execution-plan/v1" || self.identity != self.digest()? {
@@ -173,10 +83,7 @@ impl Execution {
         for op in &self.operations {
             if !op.predecessors.is_subset(&preceding)
                 || !preceding.insert(op.method.operation.clone())
-                || !chrono_harness::verified_limits::valid_execution_bounds(
-                    op.timeout_seconds,
-                    op.output_limit_bytes,
-                )
+                || !declarations::valid_execution_bounds(op.timeout_seconds, op.output_limit_bytes)
             {
                 return Err(
                     "E_EXECUTION_PLAN: duplicate, unordered prerequisite or invalid bound".into(),
@@ -208,12 +115,12 @@ pub fn binding(req: &Request, inputs: &Value) -> Value {
 pub fn operation_state_path(report_path: &str, run: &Value) -> String {
     format!(
         "{report_path}.operations-{}",
-        wire::digest(run).expect("JSON run identity serializes")
+        digest(run).expect("JSON run identity serializes")
     )
 }
 #[cfg(not(verus_keep_ghost))]
-pub fn expand(argv: &[String], binding: &Value) -> Vec<String> {
-    let mut args = argv
+pub fn expand(argv: &[String], binding: &Value) -> Result<Vec<String>, String> {
+    let args: Vec<String> = argv
         .iter()
         .map(|a| match a.as_str() {
             "{base}" => binding["base"].as_str().unwrap_or("").into(),
@@ -222,9 +129,17 @@ pub fn expand(argv: &[String], binding: &Value) -> Vec<String> {
         })
         .collect();
     if let Some(directory) = binding["operation_state"].as_str() {
-        chrono_harness::verified_verifier::bind_compiler_directory(&mut args, directory);
+        if args
+            .get(10)
+            .is_some_and(|arg| arg.starts_with("{operation_state}/"))
+        {
+            return serde_json::from_value(evidence::compiler(
+                json!({"operation":"bind","directory":directory,"argv":args}),
+            )?)
+            .map_err(|e| e.to_string());
+        }
     }
-    args
+    Ok(args)
 }
 /// Merge explicit sequences into a DAG before observing tools or launching any command.
 #[cfg(not(verus_keep_ghost))]
@@ -359,7 +274,7 @@ fn prepare_inner(
     scheduling: Option<Scheduling>,
 ) -> Result<Execution, String> {
     #[cfg(unix)]
-    environment.remove(chrono_harness::process_fds::ENV);
+    environment.remove("CHRONO_PROCESS_FDS");
     let (selected, mut operations) = order(selected, plans, methods, execute)?;
     if let Some(policy) = &scheduling {
         policy.indices(&operations)?;
@@ -367,7 +282,7 @@ fn prepare_inner(
     let root = fs::canonicalize(root).map_err(|e| e.to_string())?;
     let mut tools = BTreeMap::new();
     for op in &mut operations {
-        op.method.argv = expand(&op.method.argv, &binding);
+        op.method.argv = expand(&op.method.argv, &binding)?;
         let id = &op.method.tool;
         if tools.contains_key(id) {
             continue;
@@ -388,7 +303,7 @@ fn prepare_inner(
         let tool = if let Some(tool) = reused.get(id) {
             tool.clone()
         } else {
-            observation::tool(
+            evidence::tool(
                 &root,
                 program,
                 &argv,
@@ -426,7 +341,17 @@ fn prepare_inner(
 /// Pure validation of successful retained observations, shared with full consumers.
 #[cfg(not(verus_keep_ghost))]
 pub fn process_success(p: &ProcessResult) -> Result<(), String> {
-    observation::process_success(p)
+    if p.exit_code != 0
+        || p.failure.is_some()
+        || p.stdout_sha256 != crate::sha256(&p.stdout_bytes)
+        || p.stderr_sha256 != crate::sha256(&p.stderr_bytes)
+        || p.stdout != String::from_utf8_lossy(&p.stdout_bytes)
+        || p.stderr != String::from_utf8_lossy(&p.stderr_bytes)
+        || p.environment_digest != crate::digest(&p.environment)?
+    {
+        return Err("E_PROCESS_EVIDENCE: unsuccessful or inconsistent retained process".into());
+    }
+    Ok(())
 }
 /// Construct the current global declaration graph without observing any business executable.
 #[cfg(not(verus_keep_ghost))]
@@ -441,7 +366,7 @@ pub fn prepare_collection(
 ) -> Result<Execution, String> {
     let (selected, mut operations) = order(selected, plans, methods, execute)?;
     for op in &mut operations {
-        op.method.argv = expand(&op.method.argv, &binding);
+        op.method.argv = expand(&op.method.argv, &binding)?;
     }
     let mut plan = Execution {
         schema: "chrono-execution-plan/v1".into(),
@@ -501,16 +426,16 @@ fn validate_tool_inner(
         || actual.argv != invocation
         || actual.cwd != root
         || actual.environment != *env
-        || actual.environment_digest != wire::digest(env)?
+        || actual.environment_digest != digest(env)?
         || actual.failure.is_some()
         || actual.exit_code != 0
         || expected.is_none()
         || expected != Some(actual.stdout.trim_end())
-        || actual.stdout_sha256 != chrono_harness::sha256(&actual.stdout_bytes)
+        || actual.stdout_sha256 != crate::sha256(&actual.stdout_bytes)
         || actual.stdout.as_bytes() != actual.stdout_bytes
         || live
             && fs::read(&tool.path)
-                .map(|b| chrono_harness::sha256(&b))
+                .map(|b| crate::sha256(&b))
                 .ok()
                 .as_ref()
                 != Some(&tool.sha256)
@@ -526,36 +451,22 @@ pub fn validate_invocation(
     template: &[String],
     binding: &Value,
 ) -> Result<(), String> {
-    chrono_harness::resolve_invocation(root, entry, template, binding).map(|_| ())
-}
-#[cfg(not(verus_keep_ghost))]
-fn canonical(req: &Request, config: &Value) -> Result<(), String> {
-    let mut expected: Vec<String> =
-        serde_json::from_value(config["canonical_check"]["argv"].clone())
-            .map_err(|e| e.to_string())?;
-    if let Some(scope) = &req.scope {
-        expected.extend(scope.contract_argv(config));
-    }
-    validate_invocation(
-        &req.candidate.root,
-        &req.observations["entry"],
-        &expected,
-        &json!({"base":req.base.commit,"candidate":req.candidate.commit}),
+    let bytes = registration::runner(
+        root,
+        "check-invocation-v1",
+        &json!({"mode":"template","root":root,
+        "entry":entry,"argv":template,"binding":binding}),
     )?;
-    if config["schema_version"] == 4 {
-        chrono_harness::prepared::validate_binding(
-            &req.candidate.root,
-            config,
-            &req.config_path,
-            Some(&req.base.commit),
-            &req.candidate.commit,
-            false,
-            &req.scope,
-            Some(&req.context),
-            &req.observations["preparation"],
-        )?;
-    }
-    Ok(())
+    serde_json::from_slice::<()>(&bytes).map_err(|e| e.to_string())
+}
+
+fn canonical(req: &Request, config: &Value) -> Result<(), String> {
+    let bytes = registration::runner(
+        &req.candidate.root,
+        "check-invocation-v1",
+        &json!({"mode":"request","request":req,"config":config}),
+    )?;
+    serde_json::from_slice::<()>(&bytes).map_err(|e| e.to_string())
 }
 
 /// Validate the complete registered unit assignment before filtering a unit.
@@ -573,11 +484,9 @@ fn unit_selection(
     };
     let definitions = validate_unit_assignments(&req.observations["execution_units"], plans)?;
     match scope {
-        chrono_harness::units::Scope::Unit { unit } => {
-            chrono_harness::units::select(&definitions, selected, unit)
-                .map_err(|e| format!("E_UNIT_ASSIGNMENT: {e}"))
-        }
-        chrono_harness::units::Scope::Collect { .. } => Ok(selected.clone()),
+        Scope::Unit { unit } => crate::units::select(&definitions, selected, unit)
+            .map_err(|e| format!("E_UNIT_ASSIGNMENT: {e}")),
+        Scope::Collect { .. } => Ok(selected.clone()),
     }
 }
 
@@ -586,13 +495,13 @@ fn unit_selection(
 pub fn validate_unit_assignments(
     block: &Value,
     plans: &BTreeMap<String, Plan>,
-) -> Result<BTreeMap<String, chrono_harness::units::Unit>, String> {
+) -> Result<BTreeMap<String, crate::units::Unit>, String> {
     let units = block["units"]
         .as_object()
         .ok_or("E_UNIT_ASSIGNMENT: missing execution_units")?;
     let mut definitions = BTreeMap::new();
     for (name, value) in units {
-        let unit: chrono_harness::units::Unit =
+        let unit: crate::units::Unit =
             serde_json::from_value(value.clone()).map_err(|e| e.to_string())?;
         definitions.insert(name.clone(), unit);
     }
@@ -613,7 +522,7 @@ pub fn validate_unit_assignments(
     let shared: BTreeMap<String, Vec<String>> =
         serde_json::from_value(block["shared_operations"].clone()).map_err(|e| e.to_string())?;
     let plan_ids = plans.keys().cloned().collect();
-    chrono_harness::units::assignments(&definitions, &plan_ids, &shared, &operation_sets)
+    crate::units::assignments(&definitions, &plan_ids, &shared, &operation_sets)
         .map_err(|e| format!("E_UNIT_ASSIGNMENT: {e}"))?;
     Ok(definitions)
 }
@@ -627,8 +536,7 @@ pub struct Receipt {
     pub method: String,
     pub process: ProcessResult,
     pub compiler_dependency: Option<Result<Vec<u8>, String>>,
-    pub compiler_artifact:
-        Option<Result<chrono_harness::verified_verifier::CompiledArtifact, String>>,
+    pub compiler_artifact: Option<Result<CompiledArtifact, String>>,
     pub digest: String,
 }
 
@@ -637,7 +545,7 @@ impl Receipt {
     fn identity(&self) -> Result<String, String> {
         let mut v = serde_json::to_value(self).map_err(|e| e.to_string())?;
         v.as_object_mut().unwrap().remove("digest");
-        wire::digest(&v)
+        digest(&v)
     }
 }
 /// Compare actual producer observations, never populate missing observations from a plan.
@@ -679,19 +587,19 @@ fn compare_operation_receipt(
     argv.extend(op.method.argv.clone());
     if r.plan != plan_identity
         || r.operation != op.method.operation
-        || r.method != wire::digest(&op.method)?
+        || r.method != digest(&op.method)?
         || r.digest != r.identity()?
         || p.argv != argv
         || p.cwd != root
         || p.executable != tool.path
         || p.sha256 != tool.sha256
         || &p.environment != environment
-        || p.environment_digest != wire::digest(environment)?
-        || p.stdin_sha256 != chrono_harness::sha256(&[])
+        || p.environment_digest != digest(environment)?
+        || p.stdin_sha256 != crate::sha256(&[])
         || p.stdout_bytes.len() > op.output_limit_bytes
         || p.stderr_bytes.len() > op.output_limit_bytes
-        || p.stdout_sha256 != chrono_harness::sha256(&p.stdout_bytes)
-        || p.stderr_sha256 != chrono_harness::sha256(&p.stderr_bytes)
+        || p.stdout_sha256 != crate::sha256(&p.stdout_bytes)
+        || p.stderr_sha256 != crate::sha256(&p.stderr_bytes)
         || p.stdout != String::from_utf8_lossy(&p.stdout_bytes)
         || p.stderr != String::from_utf8_lossy(&p.stderr_bytes)
     {
@@ -699,23 +607,15 @@ fn compare_operation_receipt(
             "E_RECEIPT_MISMATCH: plan/method/tool/argv/cwd/input/environment/output".into(),
         );
     }
-    let decoded = match &op.method.output_contract {
-        None => None,
-        Some(_) => serde_json::from_slice::<chrono_harness::verified_verifier::CompilerReport>(
-            &p.stdout_bytes,
-        )
-        .ok(),
-    };
-    chrono_harness::verified_verifier::admit_observed_output(
-        &op.method.output_contract,
-        &decoded,
-        &op.method.argv,
-        p.exit_code,
-        p.failure.is_some(),
-        &r.compiler_dependency,
-        op.output_limit_bytes,
-        &r.compiler_artifact,
-    )
+    if op.method.output_contract.is_none()
+        && r.compiler_dependency.is_none()
+        && r.compiler_artifact.is_none()
+    {
+        return Ok(());
+    }
+    evidence::compiler(json!({"operation":"check","contract":op.method.output_contract,"stdout":p.stdout_bytes,
+        "argv":op.method.argv,"exit":p.exit_code,"process_failed":p.failure.is_some(),
+        "dependency":r.compiler_dependency,"limit":op.output_limit_bytes,"artifact":r.compiler_artifact})).map(|_| ())
 }
 #[cfg(not(verus_keep_ghost))]
 fn unique_actions(
@@ -730,33 +630,34 @@ fn unique_actions(
         .collect()
 }
 #[cfg(not(verus_keep_ghost))]
-pub fn judge(req: &Request) -> Response {
-    let mut response = req.response(Status::Pass);
+pub fn judge(input: impl std::io::Read) -> Result<Value, String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Envelope {
+        request: Request,
+    }
+    let envelope: Envelope = serde_json::from_reader(input).map_err(|e| e.to_string())?;
     let mut git = Value::Null;
-    let result = evaluate(req, &mut git);
-    if !git.is_null() {
-        response.outputs.insert("git_facts".into(), git);
-    }
-    match result {
-        Ok(outputs) => response.outputs.extend(outputs),
-        Err(message) => {
-            chrono_harness::wire::append_finding(
-                &mut response.status,
-                &mut response.findings,
-                Status::Fail,
-                Finding {
-                    code: message.split(':').next().unwrap_or("E_ROUTES").into(),
-                    level: "error".into(),
-                    message,
-                    delta_refs: vec!["/request".into()],
-                    causes: vec![],
-                },
-            );
+    let mut outputs = BTreeMap::new();
+    let (status, findings) = match evaluate(&envelope.request, &mut git) {
+        Ok(result) => {
+            outputs = result;
+            ("pass", vec![])
         }
+        Err(message) => (
+            "fail",
+            vec![
+                json!({"code":message.split(':').next().unwrap_or("E_ROUTES"),
+            "level":"error","message":message,"delta_refs":["/request"],"causes":[]}),
+            ],
+        ),
+    };
+    if !git.is_null() {
+        outputs.insert("git_facts".into(), git);
     }
-    response
+    Ok(json!({"status":status,"findings":findings,"outputs":outputs}))
 }
-#[cfg(not(verus_keep_ghost))]
+
 mod impact;
 #[cfg(not(verus_keep_ghost))]
 pub mod plan_query;
@@ -766,11 +667,22 @@ mod registration;
 pub mod selection;
 #[cfg(not(verus_keep_ghost))]
 pub mod source_plan;
-pub mod verified_source_pipeline;
 
 #[cfg(not(verus_keep_ghost))]
+fn artifact_directories(config: &Value) -> Result<Vec<&str>, String> {
+    config["artifacts"]
+        .as_array()
+        .ok_or("missing artifact declarations")?
+        .iter()
+        .map(|row| {
+            row["path"]
+                .as_str()
+                .ok_or_else(|| "invalid artifact path".to_owned())
+        })
+        .collect()
+}
+
 fn evaluate(req: &Request, git: &mut Value) -> Result<BTreeMap<String, Value>, String> {
-    req.validate()?;
     let views = registration::views(req, git)?;
     let old = views.base;
     let r = views.candidate;
@@ -786,14 +698,7 @@ fn evaluate(req: &Request, git: &mut Value) -> Result<BTreeMap<String, Value>, S
         &req.impact,
         &r.config["protocol"],
         &env,
-        |command, input| {
-            let process = chrono_harness::run_process(&req.candidate.root, command, input)?;
-            Ok((
-                process.exit_code,
-                process.stdout_bytes,
-                process.stderr_bytes,
-            ))
-        },
+        |command, input| commands::run(&req.candidate.root, command, input),
     )?;
     if impact.schema != "chrono-filemap-impact/v6" || impact.delta != req.delta {
         return Err("E_IMPACT: identity".into());
@@ -815,39 +720,45 @@ fn evaluate(req: &Request, git: &mut Value) -> Result<BTreeMap<String, Value>, S
     let global_plans = views.plans?;
     let actions = unique_actions(views.test_operations);
     let (global_chosen, global_operations) = order(&selected, &global_plans, &methods, &actions)?;
-    let old_outputs = facts::artifact_directories(&old.config)?
+    let old_outputs = artifact_directories(&old.config)?
         .into_iter()
         .map(str::to_owned)
         .collect();
-    let outputs = facts::artifact_directories(&r.config)?
+    let outputs = artifact_directories(&r.config)?
         .into_iter()
         .map(str::to_owned)
         .collect();
-    source_plan::validate(
-        Some((&req.base.commit, &old.filemap, &old.projects, old_outputs)),
-        (&req.candidate.commit, &r.filemap, &r.projects, outputs),
+    let previous = source_plan::Endpoint {
+        commit: req.base.commit.clone(),
+        filemap: old.filemap,
+        projects: old.projects,
+        artifacts: old_outputs,
+    };
+    let candidate = source_plan::Endpoint {
+        commit: req.candidate.commit.clone(),
+        filemap: r.filemap,
+        projects: r.projects,
+        artifacts: outputs,
+    };
+    let coverage = source_plan::coverage(
+        &req.candidate.root,
+        Some(&previous),
+        &candidate,
         &impact.reached,
         &methods,
         &global_operations,
-        |previous, candidate, paths| {
-            use chrono_harness::verified_verifier::sources::continuity;
-            if paths.is_empty() {
-                return Ok(continuity::Continuity::empty());
-            }
-            let reader = facts::Reader::for_request(req)?;
-            let result =
-                continuity::observe(&reader, &req.candidate.root, previous, candidate, paths);
-            registration::append_source_facts(git, reader.observation())?;
-            result
-        },
+        json!({"mode":"request","request":req}),
     )?;
+    if !coverage["git_facts"].is_null() {
+        registration::append_source_facts(git, coverage["git_facts"].clone())?;
+    }
+    if let Some(error) = coverage["error"].as_str() {
+        return Err(error.to_owned());
+    }
     let global_selected = selected.clone();
     let selected = unit_selection(req, &selected, &global_plans)?;
     let scheduling = views.scheduling?;
-    let plan = if matches!(
-        req.scope,
-        Some(chrono_harness::units::Scope::Collect { .. })
-    ) {
+    let plan = if matches!(req.scope, Some(Scope::Collect { .. })) {
         prepare_collection(
             &req.candidate.root,
             binding(req, &inputs),
@@ -889,7 +800,7 @@ fn evaluate(req: &Request, git: &mut Value) -> Result<BTreeMap<String, Value>, S
                 .ok()
                 .and_then(|p| p.to_str())
                 .is_some_and(|p| {
-                    r.filemap["files"]
+                    candidate.filemap["files"]
                         .as_array()
                         .unwrap()
                         .iter()

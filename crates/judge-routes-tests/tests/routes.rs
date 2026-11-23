@@ -1,5 +1,8 @@
-use chrono_harness::{CommandSpec, run_process_observed, sha256, wire};
+#[path = "support/process.rs"]
+mod process;
 use chrono_judge_routes::{Receipt, compare, order, prepare};
+use chrono_judge_routes::{protocol::CommandSpec, sha256};
+use process::run_process_observed;
 use serde_json::json;
 use std::{collections::BTreeMap, fs, os::unix::fs::symlink};
 
@@ -45,12 +48,12 @@ fn plan<T: serde::de::DeserializeOwned>(operations: &[&str]) -> T {
 fn original_receipt(
     plan: &chrono_judge_routes::Execution,
     op: &chrono_judge_routes::Operation,
-    process: chrono_harness::ProcessResult,
+    process: chrono_judge_routes::ProcessResult,
 ) -> Receipt {
     let mut receipt = Receipt {
         plan: plan.identity.clone(),
         operation: op.method.operation.clone(),
-        method: wire::digest(&op.method).unwrap(),
+        method: chrono_judge_routes::digest(&op.method).unwrap(),
         process,
         compiler_dependency: None,
         compiler_artifact: None,
@@ -63,7 +66,7 @@ fn original_receipt(
 fn seal(receipt: &mut Receipt) {
     let mut fields = serde_json::to_value(&*receipt).unwrap();
     fields.as_object_mut().unwrap().remove("digest");
-    receipt.digest = wire::digest(&fields).unwrap();
+    receipt.digest = chrono_judge_routes::digest(&fields).unwrap();
 }
 
 #[test]
@@ -124,7 +127,7 @@ fn compiler_receipts_are_checked_offline_with_the_original_io_outcome() {
             .starts_with("E_VERUS_ARTIFACT:")
     );
     let bytes = vec![255u8; 65537];
-    retained.compiler_artifact = Some(Ok(chrono_harness::verified_verifier::CompiledArtifact {
+    retained.compiler_artifact = Some(Ok(chrono_judge_routes::CompiledArtifact {
         path: b"library out.rlib".to_vec(),
         sha256: sha256(&bytes).into_bytes(),
         length: bytes.len() as u64,
@@ -148,7 +151,7 @@ fn compiler_receipts_are_checked_offline_with_the_original_io_outcome() {
         }
         let mut value = serde_json::to_value(&changed).unwrap();
         value.as_object_mut().unwrap().remove("digest");
-        changed.digest = wire::digest(&value).unwrap();
+        changed.digest = chrono_judge_routes::digest(&value).unwrap();
         assert!(
             compare(&plan, op, Some(&changed))
                 .unwrap_err()
@@ -506,7 +509,8 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
             1 => process.cwd = "/".into(),
             2 => {
                 process.environment.insert("NEW".into(), "input".into());
-                process.environment_digest = wire::digest(&process.environment).unwrap();
+                process.environment_digest =
+                    chrono_judge_routes::digest(&process.environment).unwrap();
             }
             3 => process.sha256 = "0".repeat(64),
             4 => process.stdin_sha256 = sha256(b"different input"),
@@ -534,7 +538,7 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
     );
     assert_eq!(
         receipt.process.environment_digest,
-        wire::digest(&plan.environment).unwrap()
+        chrono_judge_routes::digest(&plan.environment).unwrap()
     );
 }
 #[test]
@@ -699,7 +703,7 @@ fn reused_tool_observation_avoids_second_version_launch_and_cycle_launches_nothi
     let version_argv = vec!["count-version".into()];
     let environment = BTreeMap::new();
     let observed =
-        chrono_harness::observation::tool(&root, program, &version_argv, &environment, 10, 4096)
+        chrono_judge_routes::evidence::tool(&root, program, &version_argv, &environment, 10, 4096)
             .unwrap();
     let declarations = json!([{"id":"routes-helper","program":program,"version_argv":version_argv,"expected_version":"chrono-judge-routes-test-tool 0.1.0"}]);
     let methods = ["a", "b"]
@@ -795,7 +799,10 @@ fn scheduling_binds_identity_and_collection_reconstructs_without_processes() {
     assert!(value.get("scheduling").is_none());
     let mut unsigned = value.clone();
     unsigned.as_object_mut().unwrap().remove("identity");
-    assert_eq!(legacy.identity, wire::digest(&unsigned).unwrap());
+    assert_eq!(
+        legacy.identity,
+        chrono_judge_routes::digest(&unsigned).unwrap()
+    );
     let policy = serde_json::from_value(
         json!({"max_running":2,"resources":[],"claims":{"run":{"resources":[],"outputs":[]}}}),
     )
