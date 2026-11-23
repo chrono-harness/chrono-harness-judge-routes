@@ -11,3 +11,5 @@
 `chrono-judge-routes global-selection` 供输入组合工具选择全局测试。标准输入为一个 JSON 对象，`config` 是配置入口路径，`base` 和 `candidate` 各自按路径提供该端点的登记文档，`tests` 和 `retired_tests` 是 FILEMAP 给出的测试 ID 列表。输出是排序去重后的 JSON 数组，包含已登记的替代测试。共同退役须有已登记的下游判官负责。查询失败时返回 2，原因写入标准错误。这个查询只读取标准输入。
 
 在本仓的 GitHub Releases 选择平台二进制及同标签的 SHA256SUMS，校验后即可安装或切换版本。
+
+完整 CI 收集从宿主根目录调用 `collected-selection-v1`。stdin 提供绑定当前检出的 collect `request`、FILEMAP 选定的 `tests` 和 `retired_tests`。历史转换需要 `migration`，其中 `units` 必须是登记要求的执行单元，`originals` 是这些单元的原始清单。routes 根据解释后的两端登记核对历史测试的替代或退役，向 stdout 返回排序去重的测试数组。输入和输出错误写入 stderr 并退出 2。

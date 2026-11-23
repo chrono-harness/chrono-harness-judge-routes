@@ -42,12 +42,71 @@ pub fn select_from_registries(input: impl Read, output: impl Write) -> Result<()
     let request: SelectionRequest = serde_json::from_reader(input).map_err(|e| e.to_string())?;
     let old = Registrations::load(&request.base, &request.config)?;
     let current = Registrations::load(&request.candidate, &request.config)?;
-    let selected = global_selection(
+    write_selection(
         &old,
         &current,
         &request.tests,
         &request.retired_tests,
-        chrono_judge_registration::downstream_validator(&current, "routes"),
+        output,
+    )
+}
+
+pub fn select_collected(
+    root: &std::path::Path,
+    input: impl Read,
+    output: impl Write,
+) -> Result<(), String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct MigrationInputs {
+        units: Vec<String>,
+        originals: chrono_harness::units::FullManifest,
+    }
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Query {
+        request: chrono_harness::wire::Request,
+        migration: Option<MigrationInputs>,
+        tests: Vec<String>,
+        retired_tests: Vec<String>,
+    }
+    let query: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;
+    let req = &query.request;
+    if req.candidate.root != root
+        || !matches!(
+            req.scope,
+            Some(chrono_harness::units::Scope::Collect { .. })
+        )
+    {
+        return Err("route collection requires this checkout and a collection scope".into());
+    }
+    let reader = chrono_harness::facts::Reader::for_request(req)?;
+    let (old, current, _) =
+        chrono_judge_registration::views_for_collection_inputs_with(req, &reader, &|units| {
+            let bound = query
+                .migration
+                .as_ref()
+                .filter(|m| m.units == units)
+                .ok_or("missing original migration inputs for the selected units")?;
+            Ok(bound.originals.clone())
+        })?;
+    write_selection(&old, &current, &query.tests, &query.retired_tests, output)
+}
+
+fn write_selection(
+    old: &Registrations,
+    current: &Registrations,
+    tests: &[String],
+    retired: &[String],
+    mut output: impl Write,
+) -> Result<(), String> {
+    let selected = global_selection(
+        old,
+        current,
+        tests,
+        retired,
+        chrono_judge_registration::downstream_validator(current, "routes"),
     )?;
-    serde_json::to_writer(output, &selected).map_err(|e| e.to_string())
+    serde_json::to_writer(&mut output, &selected).map_err(|e| e.to_string())?;
+    output.flush().map_err(|e| e.to_string())
 }
