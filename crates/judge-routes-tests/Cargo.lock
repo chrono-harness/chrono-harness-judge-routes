@@ -112,7 +112,6 @@ name = "chrono-judge-routes-tests"
 version = "0.1.0"
 dependencies = [
  "chrono-harness",
- "chrono-judge-registration",
  "chrono-judge-routes",
  "serde",
  "serde_json",
