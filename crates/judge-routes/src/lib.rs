@@ -665,24 +665,40 @@ fn compare_validated(
     op: &Operation,
     receipt: Option<&Receipt>,
 ) -> Result<(), String> {
+    compare_operation_receipt(
+        &plan.identity,
+        &plan.root,
+        &plan.environment,
+        op,
+        plan.tools.get(&op.method.tool),
+        receipt,
+    )
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn compare_operation_receipt(
+    plan_identity: &str,
+    root: &Path,
+    environment: &BTreeMap<String, String>,
+    op: &Operation,
+    tool: Option<&Tool>,
+    receipt: Option<&Receipt>,
+) -> Result<(), String> {
     let r = receipt.ok_or("E_ROUTE_MISSING: missing execution receipt")?;
-    let tool = plan
-        .tools
-        .get(&op.method.tool)
-        .ok_or("E_TOOL_BINDING: missing tool")?;
+    let tool = tool.ok_or("E_TOOL_BINDING: missing tool")?;
     let p = &r.process;
     let mut argv = vec![tool.path.to_str().ok_or("tool path")?.into()];
     argv.extend(op.method.argv.clone());
-    if r.plan != plan.identity
+    if r.plan != plan_identity
         || r.operation != op.method.operation
         || r.method != wire::digest(&op.method)?
         || r.digest != r.identity()?
         || p.argv != argv
-        || p.cwd != plan.root
+        || p.cwd != root
         || p.executable != tool.path
         || p.sha256 != tool.sha256
-        || p.environment != plan.environment
-        || p.environment_digest != wire::digest(&plan.environment)?
+        || &p.environment != environment
+        || p.environment_digest != wire::digest(environment)?
         || p.stdin_sha256 != chrono_harness::sha256(&[])
         || p.stdout_bytes.len() > op.output_limit_bytes
         || p.stderr_bytes.len() > op.output_limit_bytes

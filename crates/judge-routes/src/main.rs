@@ -5,6 +5,7 @@ fn main() -> std::process::ExitCode {
         operation @ ("global-selection"
         | "collected-selection-v1"
         | "check-plan-receipts-v1"
+        | "check-operation-receipt-v1"
         | "plan-context-v1"
         | "collection-plan-v1"
         | "full-operations-v1"
@@ -36,6 +37,7 @@ fn main() -> std::process::ExitCode {
                 use chrono_judge_routes::plan_query;
                 use std::io::Write;
                 let reply = match command {
+                    "check-operation-receipt-v1" => plan_query::check_operation_receipt(input),
                     "check-plan-receipts-v1" => plan_query::check_plan_receipts(input),
                     "plan-context-v1" => plan_query::plan_context(input),
                     "source-plan-v1" => std::env::current_dir()

@@ -32,6 +32,31 @@ pub fn check_plan_receipts(input: impl std::io::Read) -> Result<Value, String> {
     Ok(json!({"plan":plan.identity,"operations":errors}))
 }
 
+/// Check the receipt for one operation taken from the caller's already admitted plan.
+pub fn check_operation_receipt(input: impl Read) -> Result<Value, String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Query {
+        plan: String,
+        root: PathBuf,
+        environment: BTreeMap<String, String>,
+        operation: crate::Operation,
+        tool: Option<chrono_harness::observation::Tool>,
+        receipt: Option<Receipt>,
+    }
+    let q: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;
+    let problem = crate::compare_operation_receipt(
+        &q.plan,
+        &q.root,
+        &q.environment,
+        &q.operation,
+        q.tool.as_ref(),
+        q.receipt.as_ref(),
+    )
+    .err();
+    Ok(json!({"plan":q.plan, "operation":q.operation.method.operation, "error":problem}))
+}
+
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Context {

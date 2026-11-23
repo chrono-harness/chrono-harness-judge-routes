@@ -16,6 +16,8 @@
 
 `check-plan-receipts-v1` 接收 JSON 对象 `{plan, receipts}`。调用方按操作名提供实际回执，命令使用 routes 的计划身份与回执核对逻辑。成功输出计划身份 `plan` 和计划内各操作的 `operations` 映射。匹配的回执对应 null，缺少或不匹配的回执对应原始错误。调用方按自己的完整性和执行成功条件采用这些结果。无效计划、无效输入或输出失败时返回 2 并写 stderr。
 
+执行单个操作后，projects 使用 `check-operation-receipt-v1`。输入中的 `plan` 是执行前已验完整计划的身份，`root`、`environment`、`operation` 和 `tool` 从该计划取得，`receipt` 是本次操作的原始回执。输出的 `plan`、`operation` 标明核对对象，`error` 为 null 或原始校验错误。离线收集整份计划及回执仍使用 `check-plan-receipts-v1`。
+
 `plan-context-v1` 从 stdin 读取 `request`、`effective_inputs` 和按操作名索引的原始参数模板 `templates`。stdout 包含 `request_id`、routes 的请求绑定 `binding` 和展开后的 `expanded`。重放收集计划时，`collection-plan-v1` 接收原坐标 `root`、`binding`、全局测试 `selected`、已解释的 `filemap` 和 `projects`、每个测试的操作声明列表 `test_operations` 以及 `environment`，返回完整的原生执行计划。这两个查询使用同一套绑定和排序逻辑，成功退出 0，错误写入 stderr 并退出 2。
 
 projects 在宿主选定的 routes 发行上使用以下查询。每个查询从 stdin 读取一个 JSON 值，通过 stdout 返回 JSON，失败时写 stderr 并退出 2。
