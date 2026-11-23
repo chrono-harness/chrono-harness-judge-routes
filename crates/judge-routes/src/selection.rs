@@ -1,4 +1,4 @@
-use chrono_harness::wire::Request;
+use crate::protocol::Request;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::{
@@ -114,7 +114,7 @@ pub fn select_collected_with(
     if q.request.candidate.root != root
         || !matches!(
             q.request.scope,
-            Some(chrono_harness::units::Scope::Collect { .. })
+            Some(crate::protocol::Scope::Collect { .. })
         )
     {
         return Err("route collection requires this checkout and a collection scope".into());

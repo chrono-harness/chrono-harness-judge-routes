@@ -1,3 +1,4 @@
+use chrono_judge_routes::protocol;
 #[path = "../../judge-routes/src/impact.rs"]
 mod impact;
 use serde_json::{Value, json};

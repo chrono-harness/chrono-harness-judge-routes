@@ -14,10 +14,7 @@ pub struct Bounds {
 }
 impl Bounds {
     fn admissible(self) -> bool {
-        chrono_harness::verified_limits::valid_execution_bounds(
-            self.timeout_seconds,
-            self.output_limit_bytes,
-        )
+        valid_execution_bounds(self.timeout_seconds, self.output_limit_bytes)
     }
 }
 
@@ -128,7 +125,7 @@ impl Scheduling {
             }
             let mut paths = BTreeSet::new();
             for output in &claim.outputs {
-                if chrono_harness::relative_path(output.trim_end_matches('/')).is_err()
+                if relative_path(output.trim_end_matches('/')).is_err()
                     || !paths.insert(Path::new(output))
                 {
                     return Err(error());
@@ -168,4 +165,21 @@ impl Dispatch {
         }
         Ok(Self { max_running, order })
     }
+}
+
+pub(super) fn valid_execution_bounds(seconds: u64, bytes: usize) -> bool {
+    seconds > 0 && (1..=67_108_864).contains(&bytes)
+}
+
+pub(super) fn relative_path(value: &str) -> Result<(), String> {
+    if value.is_empty()
+        || value.starts_with('/')
+        || value == "."
+        || value.starts_with("./")
+        || value.contains(['\0', '\n', '\r', '\\'])
+        || value.split('/').any(|part| part == "..")
+    {
+        return Err(format!("invalid relative path: {value:?}"));
+    }
+    Ok(())
 }
