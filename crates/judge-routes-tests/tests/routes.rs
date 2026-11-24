@@ -469,7 +469,7 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
     );
     assert_eq!(
         one(serde_json::Value::Null, name)["error"],
-        "E_ROUTE_MISSING: missing execution receipt"
+        "E_ROUTE_MISSING: script:p operation test (routes-helper): missing execution receipt"
     );
     let absent = evidence(&wire_plan, json!({})).unwrap();
     assert_eq!(
@@ -495,7 +495,10 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
     assert!(compare(&plan, op, None).is_err());
     let mut tampered = receipt.clone();
     tampered.process.argv.push("injected".into());
-    assert!(compare(&plan, op, Some(&tampered)).is_err());
+    assert_eq!(
+        compare(&plan, op, Some(&tampered)).unwrap_err(),
+        "E_RECEIPT_MISMATCH: script:p operation test (routes-helper): invocation arguments differ"
+    );
     let mut tampered = receipt.clone();
     tampered.plan = "other-run".into();
     assert!(compare(&plan, op, Some(&tampered)).is_err());

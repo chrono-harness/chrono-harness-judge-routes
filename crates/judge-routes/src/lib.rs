@@ -581,16 +581,24 @@ fn compare_operation_receipt(
     tool: Option<&Tool>,
     receipt: Option<&Receipt>,
 ) -> Result<(), String> {
-    let r = receipt.ok_or("E_ROUTE_MISSING: missing execution receipt")?;
-    let tool = tool.ok_or("E_TOOL_BINDING: missing tool")?;
+    let problem = |code: &str, message: &str| {
+        format!(
+            "{code}: {} operation {} ({}): {message}",
+            op.method.owner, op.method.operation, op.method.tool
+        )
+    };
+    let r = receipt.ok_or_else(|| problem("E_ROUTE_MISSING", "missing execution receipt"))?;
+    let tool = tool.ok_or_else(|| problem("E_TOOL_BINDING", "missing tool"))?;
     let p = &r.process;
     let mut argv = vec![tool.path.to_str().ok_or("tool path")?.into()];
     argv.extend(op.method.argv.clone());
+    if p.argv != argv {
+        return Err(problem("E_RECEIPT_MISMATCH", "invocation arguments differ"));
+    }
     if r.plan != plan_identity
         || r.operation != op.method.operation
         || r.method != digest(&op.method)?
         || r.digest != r.identity()?
-        || p.argv != argv
         || p.cwd != root
         || p.executable != tool.path
         || p.sha256 != tool.sha256
@@ -604,9 +612,10 @@ fn compare_operation_receipt(
         || p.stdout != String::from_utf8_lossy(&p.stdout_bytes)
         || p.stderr != String::from_utf8_lossy(&p.stderr_bytes)
     {
-        return Err(
-            "E_RECEIPT_MISMATCH: plan/method/tool/argv/cwd/input/environment/output".into(),
-        );
+        return Err(problem(
+            "E_RECEIPT_MISMATCH",
+            "plan/method/tool/cwd/input/environment/output",
+        ));
     }
     if op.method.output_contract.is_none()
         && r.compiler_dependency.is_none()
