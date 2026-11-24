@@ -18,6 +18,7 @@ pub fn digest<T: serde::Serialize>(v: &T) -> Result<String, String> {
 }
 
 mod declarations;
+pub mod verified_admission;
 pub mod verified_bounds;
 #[cfg(not(verus_keep_ghost))]
 pub use declarations::{Plan, Scheduling};
@@ -83,8 +84,8 @@ impl Execution {
         }
         let mut preceding = BTreeSet::new();
         for op in &self.operations {
-            if !op.predecessors.is_subset(&preceding)
-                || !preceding.insert(op.method.operation.clone())
+            if !verified_admission::predecessors_ready(&op.predecessors, &preceding)
+                || !verified_admission::insert_once(&mut preceding, op.method.operation.clone())
                 || !verified_bounds::valid_execution_bounds(
                     op.timeout_seconds,
                     op.output_limit_bytes,
@@ -201,7 +202,7 @@ pub fn order(
     while !operations.is_empty() {
         let id = operations
             .iter()
-            .find(|(_, op)| op.predecessors.is_subset(&done))
+            .find(|(_, op)| verified_admission::predecessors_ready(&op.predecessors, &done))
             .map(|(id, _)| id.clone())
             .ok_or("E_PLAN_CYCLE: inconsistent operation ordering")?;
         ordered.push(operations.remove(&id).unwrap());
@@ -584,7 +585,7 @@ fn compare_validated(
 
 #[cfg(not(verus_keep_ghost))]
 fn compare_operation_receipt(
-    plan_identity: &str,
+    plan_identity: &String,
     root: &Path,
     environment: &BTreeMap<String, String>,
     op: &Operation,
@@ -605,9 +606,12 @@ fn compare_operation_receipt(
     if p.argv != argv {
         return Err(problem("E_RECEIPT_MISMATCH", "invocation arguments differ"));
     }
-    if r.plan != plan_identity
-        || r.operation != op.method.operation
-        || r.method != digest(&op.method)?
+    if !verified_admission::receipt_target_matches(
+        &r.plan,
+        plan_identity,
+        &r.operation,
+        &op.method.operation,
+    ) || r.method != digest(&op.method)?
         || r.digest != r.identity()?
         || p.cwd != root
         || p.executable != tool.path
@@ -615,12 +619,21 @@ fn compare_operation_receipt(
         || &p.environment != environment
         || p.environment_digest != digest(environment)?
         || p.stdin_sha256 != crate::sha256(&[])
-        || p.stdout_bytes.len() > op.output_limit_bytes
-        || p.stderr_bytes.len() > op.output_limit_bytes
-        || p.stdout_sha256 != crate::sha256(&p.stdout_bytes)
-        || p.stderr_sha256 != crate::sha256(&p.stderr_bytes)
-        || p.stdout != String::from_utf8_lossy(&p.stdout_bytes)
-        || p.stderr != String::from_utf8_lossy(&p.stderr_bytes)
+        || !verified_admission::output_sizes_fit(
+            p.stdout_bytes.len(),
+            p.stderr_bytes.len(),
+            op.output_limit_bytes,
+        )
+        || !verified_admission::stream_matches(
+            &p.stdout_sha256,
+            &crate::sha256(&p.stdout_bytes),
+            p.stdout == String::from_utf8_lossy(&p.stdout_bytes),
+        )
+        || !verified_admission::stream_matches(
+            &p.stderr_sha256,
+            &crate::sha256(&p.stderr_bytes),
+            p.stderr == String::from_utf8_lossy(&p.stderr_bytes),
+        )
     {
         return Err(problem(
             "E_RECEIPT_MISMATCH",

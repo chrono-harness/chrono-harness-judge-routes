@@ -16,12 +16,8 @@ fn merge(
 ) -> Result<BTreeSet<String>, String> {
     let mut selected: BTreeSet<_> = tests.into_iter().collect();
     for test in retired {
-        match resolve(test)? {
-            Some(replacement) => {
-                selected.insert(replacement);
-            }
-            None if deferred => {}
-            None => return Err(format!("E_REQUIRED_TEST_REMOVED: {test}")),
+        if !crate::verified_admission::apply_retirement(&mut selected, resolve(test), deferred)? {
+            return Err(format!("E_REQUIRED_TEST_REMOVED: {test}"));
         }
     }
     Ok(selected)

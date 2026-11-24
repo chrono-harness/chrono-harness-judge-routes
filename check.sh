@@ -41,14 +41,22 @@ metadata=$(jq -ers --arg manifest "$(pwd -P)/$product" '
 filename=${metadata##*/}
 stem=${filename#lib}
 stem=${metadata%/*}/${stem%.rmeta}
-chrono-host-bootstrap check-compiler-sources native "$stem" src/verified_bounds.rs src/declarations.rs src/lib.rs ||
+chrono-host-bootstrap check-compiler-sources native "$stem" src/verified_bounds.rs src/verified_admission.rs src/declarations.rs src/selection.rs src/lib.rs ||
   coverage_failure "native library differs from required sources"
 
 bounds=crates/judge-routes/src/verified_bounds.rs
 expectations=crates/judge-routes-tests/tests/verified_bounds.rs
 
+admission=crates/judge-routes/src/verified_admission.rs
+admission_tests=crates/judge-routes-tests/tests/verified_admission.rs
+
+prove route-admission "$admission"
+prove route-admission-tests "$admission_tests"
 prove operation-bounds "$bounds"
 prove operation-bounds-tests "$expectations"
 
 admit_proof operation-bounds "$bounds"
 admit_proof operation-bounds-tests "$expectations" crates/judge-routes-tests/tests/../../judge-routes/src/verified_bounds.rs
+
+admit_proof route-admission "$admission"
+admit_proof route-admission-tests "$admission_tests" crates/judge-routes-tests/tests/../../judge-routes/src/verified_admission.rs
