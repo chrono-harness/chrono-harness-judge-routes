@@ -1175,3 +1175,22 @@ fn source_query_uses_the_host_alias_when_its_caller_clears_path() {
         );
     }
 }
+
+#[test]
+fn readiness_validates_only_the_supplied_action_assignments() {
+    use chrono_judge_routes::plan_query::check_unit_assignments;
+    use serde_json::{Value, json};
+    let mut data = json!({
+        "execution_units":{"units":{"library":{"tests":["test:lib"],"report_path":".chrono-harness/out/lib.json"}},"shared_operations":{}},
+        "plans":{"test:lib":{"operations":["check-lib"],"timeout_seconds":5,"output_limit_bytes":512}}
+    });
+    assert_eq!(
+        check_unit_assignments(data.to_string().as_bytes()).unwrap(),
+        Value::Null
+    );
+    data["execution_units"]["units"]["library"]["tests"] = json!(["test:missing"]);
+    assert_eq!(
+        check_unit_assignments(data.to_string().as_bytes()).unwrap_err(),
+        "E_UNIT_ASSIGNMENT: unknown plan test:missing"
+    );
+}

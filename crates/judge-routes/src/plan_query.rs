@@ -136,6 +136,19 @@ pub fn collection_plan_with(
     serde_json::to_value(plan).map_err(|e| e.to_string())
 }
 
+/// Registration readiness already holds the interpreted plans and unit declarations.
+pub fn check_unit_assignments(input: impl Read) -> Result<Value, String> {
+    #[derive(Deserialize)]
+    #[serde(deny_unknown_fields)]
+    struct Assignment {
+        execution_units: Value,
+        plans: BTreeMap<String, crate::Plan>,
+    }
+    let data: Assignment = serde_json::from_reader(input).map_err(|error| error.to_string())?;
+    crate::validate_unit_assignments(&data.execution_units, &data.plans)?;
+    Ok(Value::Null)
+}
+
 /// Plan the full CI obligations from the interpreted endpoint, without running tools.
 pub fn full_operations(input: impl Read) -> Result<Value, String> {
     full_operations_with(input, installed)
