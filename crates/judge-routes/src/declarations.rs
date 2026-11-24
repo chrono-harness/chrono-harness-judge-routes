@@ -44,7 +44,7 @@ impl Plan {
         let mut seen = BTreeSet::new();
         let mut steps = Vec::with_capacity(self.operations.len());
         for name in &self.operations {
-            if name.is_empty() || !seen.insert(name) {
+            if name.is_empty() || !crate::verified_admission::insert_once(&mut seen, name) {
                 return Err(error);
             }
             let bounds = match self.operation_bounds.get(name) {
