@@ -14,4 +14,4 @@
 
 ## 本仓验证
 
-产品位于 [`crates/judge-routes`](../crates/judge-routes)。原生测试位于 [`crates/judge-routes-tests`](../crates/judge-routes-tests)。在仓库根目录运行 `mise exec -- ./check.sh` 执行本仓的检查。
+产品位于 [`crates/judge-routes`](../crates/judge-routes)。原生测试位于 [`crates/judge-routes-tests`](../crates/judge-routes-tests)。在仓库根目录运行 `mise exec -- ./check.sh` 执行本仓的检查。 本仓依据 Git 变更选择路由证明、资源上限和原生消费者测试。CI 汇总核对同一候选的单元结果。
