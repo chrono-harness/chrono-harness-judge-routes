@@ -321,7 +321,13 @@ fn prepare_inner(
                 &environment,
                 &root,
                 t["expected_version"].as_str(),
-            )?;
+            )
+            .map_err(|cause| {
+                format!(
+                    "{cause}: {} operation {} (tool {id})",
+                    op.method.owner, op.method.operation
+                )
+            })?;
         }
         tools.insert(id.clone(), tool);
     }
