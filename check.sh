@@ -1,11 +1,14 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
-native_only=false
-if [[ ${1:-} == --native && $# -eq 1 ]]; then
-  native_only=true
-elif [[ $# -gt 0 ]]; then
-  echo "usage: ./check.sh [--native]" >&2
+if [[ $# -eq 0 ]]; then
+  /bin/sh .chrono-harness/ci/install.sh
+  export PATH="$PWD/.chrono-harness/bin:$PATH"
+  export CHRONO_CHECK_SOURCE=${CHRONO_CHECK_SOURCE:-local}
+  exec .chrono-harness/bin/chrono-harness check
+fi
+if [[ $# -ne 1 || $1 != --native ]]; then
+  echo 'usage: ./check.sh [--native]' >&2
   exit 2
 fi
 mkdir -p target
@@ -24,21 +27,6 @@ coverage_failure() {
   exit 1
 }
 
-verifier=$(command -v "${VERUS:-verus}") || coverage_failure "verifier not found"
-
-prove() {
-  chrono-host-bootstrap run-compiler-proof "$scratch" "$1" "$verifier" "$2" ||
-    coverage_failure "$1: verifier execution failed"
-}
-
-admit_proof() {
-  local label=$1
-  shift
-  chrono-host-bootstrap collect-compiler-proof "$scratch" "$label" "$verifier" \
-    0.2026.04.24.f8e1704 f8e17045c4ac17a02e566b8997070f2eecc255be "$@" ||
-    coverage_failure "$label: required proof result was not admitted"
-}
-
 # Read the exact library selected by Cargo in the build of the tested executable.
 metadata=$(jq -ers --arg manifest "$(pwd -P)/$product" '
   [.[] | select(.reason == "compiler-artifact" and .manifest_path == $manifest
@@ -50,22 +38,3 @@ stem=${filename#lib}
 stem=${metadata%/*}/${stem%.rmeta}
 chrono-host-bootstrap check-compiler-sources native "$stem" src/verified_bounds.rs src/verified_admission.rs src/declarations.rs src/selection.rs src/lib.rs ||
   coverage_failure "native library differs from required sources"
-
-if "$native_only"; then exit 0; fi
-
-bounds=crates/judge-routes/src/verified_bounds.rs
-expectations=crates/judge-routes-tests/tests/verified_bounds.rs
-
-admission=crates/judge-routes/src/verified_admission.rs
-admission_tests=crates/judge-routes-tests/tests/verified_admission.rs
-
-prove route-admission "$admission"
-prove route-admission-tests "$admission_tests"
-prove operation-bounds "$bounds"
-prove operation-bounds-tests "$expectations"
-
-admit_proof operation-bounds "$bounds"
-admit_proof operation-bounds-tests "$expectations" crates/judge-routes-tests/tests/../../judge-routes/src/verified_bounds.rs
-
-admit_proof route-admission "$admission"
-admit_proof route-admission-tests "$admission_tests" crates/judge-routes-tests/tests/../../judge-routes/src/verified_admission.rs
