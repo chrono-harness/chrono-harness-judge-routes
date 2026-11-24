@@ -558,19 +558,21 @@ fn tool_wrong_version_and_replacement_before_launch_fail() {
     )]);
     let plans = BTreeMap::from([("test:t".into(), plan(&["test"]))]);
     let exec = BTreeMap::from([("test:t".into(), "test".into())]);
+    let error = prepare(
+        dir.path(),
+        json!({}),
+        &plans.keys().cloned().collect(),
+        &plans,
+        &methods,
+        &exec,
+        &tools,
+        BTreeMap::new(),
+        &BTreeMap::new(),
+    )
+    .unwrap_err();
     assert!(
-        prepare(
-            dir.path(),
-            json!({}),
-            &plans.keys().cloned().collect(),
-            &plans,
-            &methods,
-            &exec,
-            &tools,
-            BTreeMap::new(),
-            &BTreeMap::new()
-        )
-        .is_err()
+        error.contains("script:p operation test (tool routes-helper)"),
+        "{error}"
     );
     // Preserve a real executable identity; replacing its bytes must fail before spawn.
     let hash = sha256(&fs::read(&path).unwrap());
