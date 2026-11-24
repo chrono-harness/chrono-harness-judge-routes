@@ -2,7 +2,7 @@
 
 将测试义务解析为已登记的方法与工具。
 
-产品和专属测试只从 crates.io 获取 Rust 依赖。运行 `./check.sh` 构建本仓程序并执行路由测试。宿主安装固定版本的 `chrono-harness`，用于核对原生判官请求、观察工具进程和读取固定提交的源码。编译器输出、源码分类及选中证明根的 Verus 检查随 runner 发布。
+产品和专属测试只从 crates.io 获取 Rust 依赖。运行 `mise exec -- ./check.sh` 构建程序、执行路由测试，并验证实际运行及重读计划时采用的超时与输出上限。宿主安装固定版本的 `chrono-harness`，用于核对原生判官请求、观察工具进程和读取固定提交的源码。编译器输出、源码分类及选中证明根的 Verus 检查随 runner 发布。
 
 [固定来源](https://github.com/ChronoAIProject/chrono-harness/tree/5f6892dfa2f73675a84e4ebdc3b06eb83b824d6e/crates/judge-routes)
 

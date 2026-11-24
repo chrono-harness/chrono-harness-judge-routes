@@ -18,6 +18,7 @@ pub fn digest<T: serde::Serialize>(v: &T) -> Result<String, String> {
 }
 
 mod declarations;
+pub mod verified_bounds;
 #[cfg(not(verus_keep_ghost))]
 pub use declarations::{Plan, Scheduling};
 #[cfg(not(verus_keep_ghost))]
@@ -84,7 +85,10 @@ impl Execution {
         for op in &self.operations {
             if !op.predecessors.is_subset(&preceding)
                 || !preceding.insert(op.method.operation.clone())
-                || !declarations::valid_execution_bounds(op.timeout_seconds, op.output_limit_bytes)
+                || !verified_bounds::valid_execution_bounds(
+                    op.timeout_seconds,
+                    op.output_limit_bytes,
+                )
             {
                 return Err(
                     "E_EXECUTION_PLAN: duplicate, unordered prerequisite or invalid bound".into(),
