@@ -34,6 +34,28 @@ fn an_operation_is_fresh_only_once_and_every_predecessor_must_have_finished() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn registration_decisions_cover_the_exact_retirement_query() {
+    let mut request = BTreeSet::<u64>::new();
+    let mut decisions = BTreeSet::<u64>::new();
+    let id = "collect".to_string();
+    expect(policy::retirement_reply_matches(None, None, &request, &decisions));
+    expect(!policy::retirement_reply_matches(Some(&id), None, &request, &decisions));
+    expect(!policy::retirement_reply_matches(None, Some(&id), &request, &decisions));
+    request.insert(2);
+    assert(request@.contains(2) && !decisions@.contains(2));
+    expect(!policy::retirement_reply_matches(Some(&id), Some(&id), &request, &decisions));
+    decisions.insert(3);
+    assert(request@.contains(2) && !decisions@.contains(2));
+    expect(!policy::retirement_reply_matches(Some(&id), Some(&id), &request, &decisions));
+    decisions.insert(2);
+    assert(!request@.contains(3) && decisions@.contains(3));
+    expect(!policy::retirement_reply_matches(Some(&id), Some(&id), &request, &decisions));
+    request.insert(3);
+    assert(request@ =~= decisions@);
+    expect(policy::retirement_reply_matches(Some(&id), Some(&id), &request, &decisions));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn removal_requires_downstream_or_a_replacement_and_propagates_the_original_error() {
     let mut selected = BTreeSet::<u64>::new();
     let absent: Result<Option<u64>, u64> = Ok(None);

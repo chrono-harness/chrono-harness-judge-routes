@@ -43,6 +43,30 @@ pub fn predecessors_ready<K: Ord>(required: &BTreeSet<K>, finished: &BTreeSet<K>
     }
 }
 
+/// A registration decision belongs to the same query only when its nullable
+/// request identity and its complete set of retired tests match.
+pub fn retirement_reply_matches<K: Ord>(
+    expected: Option<&String>, returned: Option<&String>, requested: &BTreeSet<K>, decided: &BTreeSet<K>,
+) -> (accepted: bool)
+    requires vstd::laws_cmp::obeys_cmp::<K>(),
+    ensures accepted == (requested@ == decided@ && match (expected, returned) {
+        (None, None) => true,
+        (Some(a), Some(b)) => a@ == b@,
+        _ => false,
+    }),
+{
+    let same_request = match (expected, returned) {
+        (None, None) => true,
+        (Some(a), Some(b)) => String::eq(a, b),
+        _ => false,
+    };
+    if !same_request || !predecessors_ready(requested, decided) || !predecessors_ready(decided, requested) {
+        return false;
+    }
+    assert(requested@ =~= decided@);
+    true
+}
+
 pub fn apply_retirement<K: Ord, E>(selected: &mut BTreeSet<K>, result: Result<Option<K>, E>, deferred: bool)
     -> (out: Result<bool, E>)
     requires vstd::laws_cmp::obeys_cmp::<K>(),
