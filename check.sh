@@ -1,6 +1,13 @@
 #!/usr/bin/env bash
 set -euo pipefail
 cd "$(dirname "$0")"
+native_only=false
+if [[ ${1:-} == --native && $# -eq 1 ]]; then
+  native_only=true
+elif [[ $# -gt 0 ]]; then
+  echo "usage: ./check.sh [--native]" >&2
+  exit 2
+fi
 mkdir -p target
 scratch=$(mktemp -d "$(pwd -P)/target/check.XXXXXXXX")
 trap 'rm -rf -- "$scratch"' EXIT
@@ -43,6 +50,8 @@ stem=${filename#lib}
 stem=${metadata%/*}/${stem%.rmeta}
 chrono-host-bootstrap check-compiler-sources native "$stem" src/verified_bounds.rs src/verified_admission.rs src/declarations.rs src/selection.rs src/lib.rs ||
   coverage_failure "native library differs from required sources"
+
+if "$native_only"; then exit 0; fi
 
 bounds=crates/judge-routes/src/verified_bounds.rs
 expectations=crates/judge-routes-tests/tests/verified_bounds.rs

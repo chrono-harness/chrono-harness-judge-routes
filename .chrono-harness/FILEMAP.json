@@ -1,0 +1,735 @@
+{
+  "schema_version": 2,
+  "status": "proposed",
+  "files": [
+    {
+      "path": ".chrono-harness/.gitignore",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": ".chrono-harness/FILEMAP.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
+    },
+    {
+      "path": ".chrono-harness/USAGE.md",
+      "owner": "host",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": ".chrono-harness/ci/check.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
+    },
+    {
+      "path": ".chrono-harness/ci/install.sh",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": ".chrono-harness/ci/units.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
+    },
+    {
+      "path": ".chrono-harness/config.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
+    },
+    {
+      "path": ".chrono-harness/judges.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
+    },
+    {
+      "path": ".chrono-harness/pr.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": ".chrono-harness/projects.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
+    },
+    {
+      "path": ".chrono-harness/rules.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": ".chrono-harness/template-answers.yml",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": ".chrono-harness/workflow.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
+    },
+    {
+      "path": ".chrono-harness/worktree.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
+    },
+    {
+      "path": ".config/mise/conf.d/chrono-harness.toml",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/bug.yml",
+      "owner": "host",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/documentation.yml",
+      "owner": "host",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/enhancement.yml",
+      "owner": "host",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": ".github/ISSUE_TEMPLATE/question.yml",
+      "owner": "host",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": ".github/PULL_REQUEST_TEMPLATE.md",
+      "owner": "host",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": ".github/workflows/check.yml",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": ".github/workflows/release.yml",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": ".gitignore",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": "AGENTS.md",
+      "owner": "host",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": [],
+      "symlink": "CLAUDE.md"
+    },
+    {
+      "path": "CLAUDE.md",
+      "owner": "host",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": "README.md",
+      "owner": "host",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": "check.sh",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/Cargo.lock",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/Cargo.toml",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/tests/fixtures/selection-registries.json",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/tests/fixtures/shared-methods.json",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/tests/fixtures/shared-plans.json",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/tests/impact.rs",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/tests/routes.rs",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/tests/selection.rs",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/tests/support/process.rs",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/tests/support/runner.rs",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/tests/support/tool.rs",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes-tests/tests/verified_admission.rs",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes-tests/tests/verified_admission.rs",
+            "operation": "verify.route-admission-tests"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/judge-routes-tests/tests/verified_bounds.rs",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes-tests/tests/verified_bounds.rs",
+            "operation": "verify.route-bounds-tests"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/judge-routes/Cargo.lock",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/Cargo.toml",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/commands.rs",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/declarations.rs",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/evidence.rs",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/impact.rs",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/lib.rs",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/main.rs",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/plan_query.rs",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/protocol.rs",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/registration.rs",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/selection.rs",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/source_plan.rs",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/units.rs",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    },
+    {
+      "path": "crates/judge-routes/src/verified_admission.rs",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes/src/verified_admission.rs",
+            "operation": "verify.route-admission"
+          },
+          {
+            "path": "crates/judge-routes-tests/tests/verified_admission.rs",
+            "operation": "verify.route-admission-tests"
+          }
+        ]
+      }
+    },
+    {
+      "path": "crates/judge-routes/src/verified_bounds.rs",
+      "owner": "judge-routes",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes/src/verified_bounds.rs",
+            "operation": "verify.route-bounds"
+          },
+          {
+            "path": "crates/judge-routes-tests/tests/verified_bounds.rs",
+            "operation": "verify.route-bounds-tests"
+          }
+        ]
+      }
+    },
+    {
+      "path": "docs/licenses/methodology-attribution.md",
+      "owner": "host",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": "docs/licenses/trureturing-Apache-2.0.txt",
+      "owner": "host",
+      "surface": "documentation",
+      "cost": "unmeasured",
+      "edges": []
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ]
+    }
+  ],
+  "project_edges": [],
+  "cost_models": {
+    "unmeasured": {
+      "cpu_ms": null,
+      "wall_ms": null,
+      "peak_rss_bytes": null,
+      "io_bytes": null,
+      "basis": "unknown"
+    }
+  },
+  "test_costs": [
+    {
+      "test": "judge-routes-tests",
+      "cost": "unmeasured"
+    }
+  ],
+  "execution_plans": {
+    "test:judge-routes-tests": {
+      "operations": [
+        "verify.route-admission",
+        "verify.route-bounds",
+        "verify.route-admission-tests",
+        "verify.route-bounds-tests",
+        "judge-routes.owner-check"
+      ],
+      "timeout_seconds": 600,
+      "output_limit_bytes": 2097152
+    }
+  }
+}

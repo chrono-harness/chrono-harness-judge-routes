@@ -1,0 +1,130 @@
+{
+  "schema_version": 2,
+  "status": "active",
+  "owners": [
+    "host",
+    "judge-routes",
+    "judge-routes-tests"
+  ],
+  "projects": [
+    {
+      "id": "judge-routes",
+      "kind": "production",
+      "manifest": "crates/judge-routes/Cargo.toml",
+      "lockfile": "crates/judge-routes/Cargo.lock",
+      "root": "crates/judge-routes",
+      "test_project": "judge-routes-tests",
+      "actions": {
+        "verify_admission": {
+          "operation": "verify.route-admission",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.route-admission.rlib,dep-info=.chrono-harness/state/verify.route-admission.rlib.d",
+            "crates/judge-routes/src/verified_admission.rs",
+            "-o",
+            ".chrono-harness/state/verify.route-admission.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "verify_bounds": {
+          "operation": "verify.route-bounds",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.route-bounds.rlib,dep-info=.chrono-harness/state/verify.route-bounds.rlib.d",
+            "crates/judge-routes/src/verified_bounds.rs",
+            "-o",
+            ".chrono-harness/state/verify.route-bounds.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        }
+      },
+      "language": "rust"
+    },
+    {
+      "id": "judge-routes-tests",
+      "kind": "test",
+      "manifest": "crates/judge-routes-tests/Cargo.toml",
+      "lockfile": "crates/judge-routes-tests/Cargo.lock",
+      "root": "crates/judge-routes-tests",
+      "tests_for": "judge-routes",
+      "actions": {
+        "verify_admission": {
+          "operation": "verify.route-admission-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.route-admission-tests.rlib,dep-info=.chrono-harness/state/verify.route-admission-tests.rlib.d",
+            "crates/judge-routes-tests/tests/verified_admission.rs",
+            "-o",
+            ".chrono-harness/state/verify.route-admission-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "verify_bounds": {
+          "operation": "verify.route-bounds-tests",
+          "tool": "verus",
+          "argv": [
+            "--crate-type=lib",
+            "--no-cheating",
+            "--no-external-by-default",
+            "--num-threads",
+            "2",
+            "--output-json",
+            "--compile",
+            "--emit=link=.chrono-harness/state/verify.route-bounds-tests.rlib,dep-info=.chrono-harness/state/verify.route-bounds-tests.rlib.d",
+            "crates/judge-routes-tests/tests/verified_bounds.rs",
+            "-o",
+            ".chrono-harness/state/verify.route-bounds-tests.rlib",
+            "-Zchecksum-hash-algorithm=sha256"
+          ],
+          "output_contract": {
+            "version": "0.2026.04.24.f8e1704",
+            "commit": "f8e17045c4ac17a02e566b8997070f2eecc255be"
+          }
+        },
+        "execute": {
+          "operation": "judge-routes.owner-check",
+          "tool": "bash",
+          "argv": [
+            "./check.sh",
+            "--native"
+          ]
+        }
+      },
+      "language": "rust"
+    }
+  ],
+  "scripts": []
+}
