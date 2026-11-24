@@ -15,6 +15,7 @@ test = false
 bench = false
 
 [dependencies]
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 serde_jcs = "=0.2.0"

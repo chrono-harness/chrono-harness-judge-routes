@@ -1,4 +1,5 @@
 //! Execution declarations as consumed by the route planner and retained plan reader.
+use crate::verified_bounds::valid_execution_bounds;
 use serde::{Deserialize, Serialize};
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -165,10 +166,6 @@ impl Dispatch {
         }
         Ok(Self { max_running, order })
     }
-}
-
-pub(super) fn valid_execution_bounds(seconds: u64, bytes: usize) -> bool {
-    seconds > 0 && (1..=67_108_864).contains(&bytes)
 }
 
 pub(super) fn relative_path(value: &str) -> Result<(), String> {

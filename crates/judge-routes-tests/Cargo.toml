@@ -11,6 +11,7 @@ serde = {version="1",features=["derive"]}
 chrono-judge-routes = { path = "../judge-routes" }
 
 [dev-dependencies]
+verus_builtin_macros = "=0.0.0-2026-04-20-1748"
 tempfile = "3"
 
 [[bin]]
