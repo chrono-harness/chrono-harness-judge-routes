@@ -1199,3 +1199,73 @@ fn readiness_validates_only_the_supplied_action_assignments() {
         "E_UNIT_ASSIGNMENT: unknown plan test:missing"
     );
 }
+
+#[test]
+fn route_query_requires_unique_plans_and_exact_shared_operations() {
+    use chrono_judge_routes::plan_query::check_unit_assignments;
+    use serde_json::{Value, json};
+    let request = json!({
+        "execution_units": {
+            "units": {
+                "one": {"tests":["test:a"],"report_path":"one.json"},
+                "two": {"tests":["test:b"],"report_path":"two.json"}
+            },
+            "shared_operations":{"both":["two","one"]}
+        },
+        "plans": {
+            "test:a":{"operations":["both","just-a"],"timeout_seconds":5,"output_limit_bytes":512},
+            "test:b":{"operations":["both"],"timeout_seconds":5,"output_limit_bytes":512}
+        }
+    });
+    let query = |v: &Value| check_unit_assignments(v.to_string().as_bytes());
+    assert_eq!(query(&request).unwrap(), Value::Null);
+    for (pointer, replacement, error) in [
+        (
+            "/execution_units/units/two/tests",
+            json!([]),
+            "missing CI unit plan assignment",
+        ),
+        (
+            "/execution_units/units/two/tests",
+            json!(["test:b", "test:a"]),
+            "duplicate CI unit plan assignment: test:a",
+        ),
+        (
+            "/execution_units/shared_operations/both",
+            json!(["one", "two", "one"]),
+            "invalid shared operation assignment: both",
+        ),
+        (
+            "/execution_units/shared_operations/both",
+            json!(["one", "bogus"]),
+            "invalid shared operation assignment: both",
+        ),
+        (
+            "/execution_units/shared_operations/both",
+            json!(["one"]),
+            "invalid shared operation assignment: both",
+        ),
+        (
+            "/execution_units/shared_operations",
+            json!({}),
+            "shared operations must explicitly name exactly the units that repeat them",
+        ),
+        (
+            "/execution_units/shared_operations",
+            json!({"both":["one","two"],"none":["one","two"]}),
+            "shared operations must explicitly name exactly the units that repeat them",
+        ),
+        (
+            "/execution_units/shared_operations",
+            json!({"both":["one","two"],"just-a":["one","two"]}),
+            "shared operations must explicitly name exactly the units that repeat them",
+        ),
+    ] {
+        let mut modified = request.clone();
+        *modified.pointer_mut(pointer).unwrap() = replacement;
+        assert_eq!(
+            query(&modified).unwrap_err(),
+            format!("E_UNIT_ASSIGNMENT: {error}")
+        );
+    }
+}

@@ -5,6 +5,14 @@ use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
+#[cfg(verus_keep_ghost)]
+#[path = "units.rs"]
+mod units;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::units::{PlanAssignment, assign_plan, shared_operation_matches, valid_shared_row};
+#[cfg(verus_keep_ghost)]
+pub use units::{PlanAssignment, assign_plan, shared_operation_matches, valid_shared_row};
+
 verus! {
 
 pub fn insert_once<K: Ord>(seen: &mut BTreeSet<K>, id: K) -> (fresh: bool)
