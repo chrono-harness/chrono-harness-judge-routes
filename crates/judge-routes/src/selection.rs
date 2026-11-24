@@ -51,7 +51,7 @@ struct Decisions {
 pub(crate) fn choose(
     judge: &str,
     endpoints: Value,
-    expected: Value,
+    expected: Option<&String>,
     tests: Vec<String>,
     retired: Vec<String>,
     run: impl FnOnce(&str, &Value) -> Result<Vec<u8>, String>,
@@ -59,12 +59,19 @@ pub(crate) fn choose(
     let query = json!({"judge":judge,"endpoints":endpoints,"retired_tests":retired});
     let reply: Decisions =
         serde_json::from_slice(&run("test-retirements-v1", &query)?).map_err(|e| e.to_string())?;
-    if reply.request_id != expected
-        || reply.retirements.keys().collect::<BTreeSet<_>>() != retired.iter().collect()
-    {
-        return Err(
-            "E_RETIREMENT: registration reply differs from requested tests or collection".into(),
-        );
+    let mismatch = "E_RETIREMENT: registration reply differs from requested tests or collection";
+    let returned = match &reply.request_id {
+        Value::Null => None,
+        Value::String(id) => Some(id),
+        _ => return Err(mismatch.into()),
+    };
+    if !crate::verified_admission::retirement_reply_matches(
+        expected,
+        returned,
+        &retired.iter().collect(),
+        &reply.retirements.keys().collect(),
+    ) {
+        return Err(mismatch.into());
     }
     merge(tests, &retired, reply.downstream, |test| {
         reply.retirements[test].clone()
@@ -73,7 +80,7 @@ pub(crate) fn choose(
 
 fn write_selection(
     endpoints: Value,
-    expected: Value,
+    expected: Option<&String>,
     tests: Vec<String>,
     retired: Vec<String>,
     mut output: impl Write,
@@ -92,7 +99,7 @@ pub fn select_from_registries_with(
     let q: Documents = serde_json::from_reader(input).map_err(|e| e.to_string())?;
     write_selection(
         json!({"mode":"documents","config":q.config,"base":q.base,"candidate":q.candidate}),
-        Value::Null,
+        None,
         q.tests,
         q.retired_tests,
         output,
@@ -115,10 +122,9 @@ pub fn select_collected_with(
     {
         return Err("route collection requires this checkout and a collection scope".into());
     }
-    let expected = json!(q.request.request_id);
     write_selection(
         json!({"mode":"collection","request":q.request,"migration":q.migration}),
-        expected,
+        Some(&q.request.request_id),
         q.tests,
         q.retired_tests,
         output,

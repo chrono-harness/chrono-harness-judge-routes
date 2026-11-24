@@ -742,7 +742,7 @@ fn evaluate(req: &Request, git: &mut Value) -> Result<BTreeMap<String, Value>, S
         selection::choose(
             &req.judge_id,
             json!({"mode":"view","view":view,"config":req.config_path}),
-            Value::Null,
+            None,
             impact.tests,
             impact.retired_tests,
             |op, input| registration::query(&req.candidate.root, op, input),

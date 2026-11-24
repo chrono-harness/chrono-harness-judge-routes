@@ -66,6 +66,28 @@ fn selects_replacement_and_requires_downstream_validator_for_joint_removal() {
 }
 
 #[test]
+fn rejects_extra_or_substituted_decisions_and_malformed_identity_before_selection() {
+    let retired = json!(["test:old", "test:old"]);
+    let valid =
+        json!({"request_id":null, "downstream":true, "retirements":{"test:old":{"Ok":"test:new"}}});
+    for (field, invalid) in [
+        ("request_id", json!(42)),
+        (
+            "retirements",
+            json!({"test:old":{"Ok":"test:new"}, "test:extra":{"Ok":null}}),
+        ),
+        ("retirements", json!({"test:other":{"Ok":"test:new"}})),
+    ] {
+        let mut reply = valid.clone();
+        reply[field] = invalid;
+        assert_eq!(
+            select(json!([]), retired.clone(), reply).unwrap_err(),
+            "E_RETIREMENT: registration reply differs from requested tests or collection"
+        );
+    }
+}
+
+#[test]
 fn collection_forwards_the_sealed_request_and_unit_originals_and_binds_the_reply() {
     use chrono_judge_routes::selection::select_collected_with;
     use std::path::Path;
