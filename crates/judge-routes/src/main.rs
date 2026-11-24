@@ -15,6 +15,7 @@ fn main() -> std::process::ExitCode {
         | "collection-plan-v1"
         | "full-operations-v1"
         | "source-plan-v1"
+        | "check-unit-assignments-v1"
         | "unit-declarations-v1"
         | "retained-tool-v1"
         | "check-plan-v1"
@@ -59,6 +60,7 @@ fn main() -> std::process::ExitCode {
                     "check-scoped-plan-v1" => plan_query::check_scoped_plan(input),
                     "dispatch-plan-v1" => plan_query::dispatch_plan(input),
                     "check-plan-v1" => plan_query::check_plan(input),
+                    "check-unit-assignments-v1" => plan_query::check_unit_assignments(input),
                     "unit-declarations-v1" => plan_query::unit_declarations(input),
                     _ => plan_query::collection_plan(input),
                 };
