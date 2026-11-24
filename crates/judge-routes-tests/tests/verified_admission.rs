@@ -2,7 +2,7 @@
 #![allow(unexpected_cfgs)]
 #[cfg(not(verus_keep_ghost))]
 use chrono_judge_routes::verified_admission as policy;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 #[cfg(verus_keep_ghost)]
 #[path = "../../judge-routes/src/verified_admission.rs"]
 mod policy;
@@ -18,6 +18,42 @@ fn expect(value: bool)
 { if !value { panic!(); } }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn assignment_rejects_unknown_and_repeated_plans_without_changing_membership() {
+    let mut plans = BTreeSet::<u64>::new();
+    let mut assigned = BTreeSet::<u64>::new();
+    plans.insert(3);
+    expect(matches!(policy::assign_plan(&plans, &mut assigned, 7), policy::PlanAssignment::Unknown));
+    expect(!policy::predecessors_ready(&plans, &assigned));
+    expect(matches!(policy::assign_plan(&plans, &mut assigned, 3), policy::PlanAssignment::Accepted));
+    expect(matches!(policy::assign_plan(&plans, &mut assigned, 3), policy::PlanAssignment::Duplicate));
+    expect(policy::predecessors_ready(&plans, &assigned));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn shared_rows_bind_the_entire_set_of_registered_units() {
+    let mut known = BTreeMap::<u64, u64>::new();
+    known.insert(1, 0);
+    known.insert(2, 0);
+    let mut actual = BTreeSet::<u64>::new();
+    actual.insert(1);
+    expect(policy::shared_operation_matches(&actual, None));
+    expect(!policy::valid_shared_row(&actual, 1, &known));
+    actual.insert(2);
+    expect(!policy::shared_operation_matches(&actual, None));
+    expect(policy::valid_shared_row(&actual, 2, &known));
+    expect(!policy::valid_shared_row(&actual, 3, &known));
+    let mut declared = BTreeSet::<u64>::new();
+    declared.insert(1);
+    declared.insert(2);
+    assert(actual@ =~= declared@);
+    expect(policy::shared_operation_matches(&actual, Some(&declared)));
+    declared.insert(3);
+    assert(declared@.contains(3) && !actual@.contains(3));
+    expect(!policy::shared_operation_matches(&actual, Some(&declared)));
+    expect(!policy::valid_shared_row(&declared, 3, &known));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn an_operation_is_fresh_only_once_and_every_predecessor_must_have_finished() {
     let mut required = BTreeSet::<u64>::new();
     let mut finished = BTreeSet::<u64>::new();
@@ -25,8 +61,10 @@ fn an_operation_is_fresh_only_once_and_every_predecessor_must_have_finished() {
     expect(policy::insert_once(&mut required, 3));
     expect(policy::insert_once(&mut required, 8));
     expect(!policy::insert_once(&mut required, 3));
+    assert(required@.contains(3) && !finished@.contains(3));
     expect(!policy::predecessors_ready(&required, &finished));
     finished.insert(8);
+    assert(required@.contains(3) && !finished@.contains(3));
     expect(!policy::predecessors_ready(&required, &finished));
     finished.insert(3);
     finished.insert(11);
