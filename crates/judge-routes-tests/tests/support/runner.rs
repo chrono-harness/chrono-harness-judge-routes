@@ -119,6 +119,33 @@ fn query(op: &str, input: Value) -> Result<Value, String> {
     }
 }
 fn main() {
+    if let Some(dir) = std::env::var_os("ROUTES_RUNNER_RESPONSE") {
+        use std::io::{Read, Write};
+        let dir = PathBuf::from(dir);
+        assert_eq!(
+            std::env::args().skip(1).collect::<Vec<_>>(),
+            ["source-coverage-v1"]
+        );
+        if !dir.join("close-input").exists() {
+            let mut request = Vec::new();
+            std::io::stdin().lock().read_to_end(&mut request).unwrap();
+            fs::write(dir.join("request"), request).unwrap();
+        }
+        std::io::stdout()
+            .lock()
+            .write_all(&fs::read(dir.join("reply")).unwrap())
+            .unwrap();
+        std::io::stderr()
+            .lock()
+            .write_all(&fs::read(dir.join("diagnostic")).unwrap())
+            .unwrap();
+        let code: i32 = fs::read_to_string(dir.join("status"))
+            .unwrap()
+            .parse()
+            .unwrap();
+        fs::write(dir.join("completed"), b"source-coverage-v1").unwrap();
+        std::process::exit(code);
+    }
     let input = serde_json::from_reader(std::io::stdin().lock()).unwrap();
     match query(&std::env::args().nth(1).unwrap(), input) {
         Ok(value) => println!("{value}"),

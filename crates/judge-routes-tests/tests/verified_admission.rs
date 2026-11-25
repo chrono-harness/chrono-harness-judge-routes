@@ -13,6 +13,26 @@ use vstd::{prelude::*, vpanic as panic};
 
 verus! {
 
+/// The same real stdout and stderr may occur with either request-write outcome.
+fn required_runner_response(success: bool, raw: Vec<u8>, err: Vec<u8>, sent: Result<(), String>) {
+    let ghost out = raw@;
+    let ghost diagnostic = err@;
+    let ghost wrote = sent;
+    match policy::runner_response(success, raw, err, sent) {
+        Ok(bytes) => { proof { assert(success && wrote is Ok && bytes@ == out); } }
+        Err(policy::RunnerError::ExitStatus) => {
+            proof { assert(!success && diagnostic.len() == 0); }
+        }
+        Err(policy::RunnerError::Diagnostic(bytes)) => {
+            proof { assert(!success && diagnostic.len() > 0 && bytes@ == diagnostic); }
+        }
+        Err(policy::RunnerError::Request(message)) => {
+            proof { assert(success && wrote == Err::<(), String>(message)); }
+        }
+    }
+}
+
+
 fn expect(value: bool)
     requires value,
 { if !value { panic!(); } }

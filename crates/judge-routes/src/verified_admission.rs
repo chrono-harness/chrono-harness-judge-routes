@@ -15,6 +15,34 @@ pub use units::{PlanAssignment, assign_plan, shared_operation_matches, valid_sha
 
 verus! {
 
+/// Business outcome of a joined runner subprocess and its completed request writer.
+pub enum RunnerError {
+    ExitStatus,
+    Diagnostic(Vec<u8>),
+    Request(String),
+}
+
+pub fn runner_response(success: bool, stdout: Vec<u8>, stderr: Vec<u8>, sent: Result<(), String>)
+    -> (reply: Result<Vec<u8>, RunnerError>)
+    ensures match reply {
+        Ok(data) => success && sent is Ok && data@ == stdout@,
+        Err(RunnerError::ExitStatus) => !success && stderr@.len() == 0,
+        Err(RunnerError::Diagnostic(data)) => !success && stderr@.len() > 0 && data@ == stderr@,
+        Err(RunnerError::Request(message)) => success && sent == Err::<(), String>(message),
+    },
+{
+    if success {
+        match sent {
+            Ok(()) => Ok(stdout),
+            Err(message) => Err(RunnerError::Request(message)),
+        }
+    } else if stderr.is_empty() {
+        Err(RunnerError::ExitStatus)
+    } else {
+        Err(RunnerError::Diagnostic(stderr))
+    }
+}
+
 /// Admit each claimed priority ID at the rank given by its registration order.
 pub fn record_priority<K: Ord>(ranks: &mut BTreeMap<K, usize>, id: K, name: &[u8], claimed: bool, rank: usize)
     -> (fresh: bool)
