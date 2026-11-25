@@ -110,4 +110,60 @@ pub fn stream_matches(digest: &String, calculated: &String, decoded_matches: boo
     String::eq(digest, calculated) && decoded_matches
 }
 
+/// Check a completed version probe before accepting its recorded environment.
+pub fn probe_matches<O, S, E>(
+    exit_code: i32, failed: bool, stdout: O, stderr: S, environment: E,
+) -> (result: Result<bool, String>)
+where
+    O: FnOnce() -> bool,
+    S: FnOnce() -> bool,
+    E: FnOnce() -> Result<bool, String>,
+    requires stdout.requires(()), stderr.requires(()), environment.requires(()),
+    ensures
+        if exit_code != 0 || failed {
+            result == Ok::<bool, String>(false)
+        } else {
+            exists|out: bool| #[trigger] stdout.ensures((), out) &&
+                if !out {
+                    result == Ok::<bool, String>(false)
+                } else {
+                    exists|err: bool| #[trigger] stderr.ensures((), err) &&
+                        if !err { result == Ok::<bool, String>(false) }
+                        else { environment.ensures((), result) }
+                }
+        },
+{
+    if exit_code != 0 || failed || !stdout() || !stderr() { return Ok(false); }
+    environment()
+}
+
+}
+
+/// Pure validation of successful retained observations, shared with full consumers.
+#[cfg(not(verus_keep_ghost))]
+pub fn process_success(p: &crate::ProcessResult) -> Result<(), String> {
+    let matches = probe_matches(
+        p.exit_code,
+        p.failure.is_some(),
+        || {
+            stream_matches(
+                &p.stdout_sha256,
+                &crate::sha256(&p.stdout_bytes),
+                p.stdout == String::from_utf8_lossy(&p.stdout_bytes),
+            )
+        },
+        || {
+            stream_matches(
+                &p.stderr_sha256,
+                &crate::sha256(&p.stderr_bytes),
+                p.stderr == String::from_utf8_lossy(&p.stderr_bytes),
+            )
+        },
+        || Ok(p.environment_digest == crate::digest(&p.environment)?),
+    )?;
+    if matches {
+        Ok(())
+    } else {
+        Err("E_PROCESS_EVIDENCE: unsuccessful or inconsistent retained process".into())
+    }
 }

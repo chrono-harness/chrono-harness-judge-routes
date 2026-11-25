@@ -442,6 +442,25 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
         chrono_judge_routes::plan_query::retained_tool(q.to_string().as_bytes())
     };
     assert_eq!(verify(&retained).unwrap()["sha256"], tool.sha256);
+    for (field, changed) in [
+        ("exit_code", json!(1)),
+        ("failure", json!("version probe failed")),
+        ("stdout_bytes", json!([])),
+        ("stderr_bytes", json!([255])),
+        ("stdout_sha256", json!("wrong digest")),
+        ("stderr_sha256", json!("wrong digest")),
+        ("stdout", json!("different version text")),
+        ("stderr", json!("different error text")),
+        ("environment_digest", json!("different environment")),
+    ] {
+        let mut candidate = retained.clone();
+        candidate["tool"]["version"][field] = changed;
+        assert_eq!(
+            verify(&candidate).unwrap_err(),
+            "E_TOOL_BINDING: E_PROCESS_EVIDENCE: unsuccessful or inconsistent retained process",
+            "{field}",
+        );
+    }
     retained["root"] = json!("/another-host");
     assert!(verify(&retained).unwrap_err().contains("E_TOOL_BINDING"));
     let observed = evidence(&wire_plan, json!({ (name):receipt})).unwrap();

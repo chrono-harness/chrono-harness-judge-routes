@@ -132,4 +132,29 @@ fn a_sealed_receipt_keeps_run_identity_and_checks_each_stream_at_the_limit() {
     expect(!policy::output_sizes_fit(0, 5, 4));
 }
 
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn tool_probe_requires_both_streams_before_reading_the_environment() {
+    // The error must survive only when all earlier observations succeed.
+    let good = || -> (v: bool) ensures v { true };
+    let bad = || -> (v: bool) ensures !v { false };
+    let matching_env = || -> (r: Result<bool, String>) ensures r == Ok::<bool, String>(true) { Ok(true) };
+    let other_env = || -> (r: Result<bool, String>) ensures r == Ok::<bool, String>(false) { Ok(false) };
+    let read_error = || -> (r: Result<bool, String>)
+        ensures match r { Err(e) => e@ == "environment encoding"@, Ok(_) => false }
+    { Err("environment encoding".to_string()) };
+    expect(matches!(policy::probe_matches(1, false, good, good, read_error), Ok(false)));
+    expect(matches!(policy::probe_matches(0, true, good, good, read_error), Ok(false)));
+    expect(matches!(policy::probe_matches(0, false, bad, good, read_error), Ok(false)));
+    expect(matches!(policy::probe_matches(0, false, good, bad, read_error), Ok(false)));
+    expect(matches!(policy::probe_matches(0, false, good, good, other_env), Ok(false)));
+    expect(matches!(policy::probe_matches(0, false, good, good, matching_env), Ok(true)));
+    match policy::probe_matches(0, false, good, good, read_error) {
+        Err(error) => {
+            assert(error@ == "environment encoding"@);
+            expect(error == "environment encoding".to_string());
+        },
+        Ok(_) => panic!("environment error lost"),
+    }
+}
+
 }
