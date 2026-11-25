@@ -26,10 +26,10 @@
             "2",
             "--output-json",
             "--compile",
-            "--emit=link=.chrono-harness/state/verify.route-admission.rlib,dep-info=.chrono-harness/state/verify.route-admission.rlib.d",
+            "--emit=link={operation_state}/verify.route-admission.rlib,dep-info={operation_state}/verify.route-admission.rlib.d",
             "crates/judge-routes/src/verified_admission.rs",
             "-o",
-            ".chrono-harness/state/verify.route-admission.rlib",
+            "{operation_state}/verify.route-admission.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ],
           "output_contract": {
@@ -48,10 +48,10 @@
             "2",
             "--output-json",
             "--compile",
-            "--emit=link=.chrono-harness/state/verify.route-bounds.rlib,dep-info=.chrono-harness/state/verify.route-bounds.rlib.d",
+            "--emit=link={operation_state}/verify.route-bounds.rlib,dep-info={operation_state}/verify.route-bounds.rlib.d",
             "crates/judge-routes/src/verified_bounds.rs",
             "-o",
-            ".chrono-harness/state/verify.route-bounds.rlib",
+            "{operation_state}/verify.route-bounds.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ],
           "output_contract": {
@@ -81,10 +81,10 @@
             "2",
             "--output-json",
             "--compile",
-            "--emit=link=.chrono-harness/state/verify.route-admission-tests.rlib,dep-info=.chrono-harness/state/verify.route-admission-tests.rlib.d",
+            "--emit=link={operation_state}/verify.route-admission-tests.rlib,dep-info={operation_state}/verify.route-admission-tests.rlib.d",
             "crates/judge-routes-tests/tests/verified_admission.rs",
             "-o",
-            ".chrono-harness/state/verify.route-admission-tests.rlib",
+            "{operation_state}/verify.route-admission-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ],
           "output_contract": {
@@ -103,10 +103,10 @@
             "2",
             "--output-json",
             "--compile",
-            "--emit=link=.chrono-harness/state/verify.route-bounds-tests.rlib,dep-info=.chrono-harness/state/verify.route-bounds-tests.rlib.d",
+            "--emit=link={operation_state}/verify.route-bounds-tests.rlib,dep-info={operation_state}/verify.route-bounds-tests.rlib.d",
             "crates/judge-routes-tests/tests/verified_bounds.rs",
             "-o",
-            ".chrono-harness/state/verify.route-bounds-tests.rlib",
+            "{operation_state}/verify.route-bounds-tests.rlib",
             "-Zchecksum-hash-algorithm=sha256"
           ],
           "output_contract": {
