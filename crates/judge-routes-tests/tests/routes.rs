@@ -1214,6 +1214,97 @@ fn source_query_uses_the_host_alias_when_its_caller_clears_path() {
 }
 
 #[test]
+fn source_plan_reports_the_completed_runner_and_request_writer() {
+    use std::process::{Command, Stdio};
+
+    let root = tempfile::tempdir().unwrap();
+    symlink(
+        env!("CARGO_BIN_EXE_chrono-harness"),
+        root.path().join("chrono-harness"),
+    )
+    .unwrap();
+    let commit = "a".repeat(40);
+    let reply = json!({"previous":null,"candidate":commit,"error":"λ","git_facts":null});
+    let status = "chrono-harness source-coverage-v1 exit status: 17\n";
+    let pipe = format!("{}\n", std::io::Error::from_raw_os_error(32));
+    let utf8 = "invalid utf-8 sequence of 1 bytes from index 0\n";
+    let diag = "route λ\n\n";
+    for (case, closed, code, stderr, expected) in [
+        ("success", false, 0, b"unused".as_slice(), ""),
+        (
+            "bad-json",
+            false,
+            0,
+            b"",
+            "EOF while parsing a value at line 1 column 0\n",
+        ),
+        ("status", false, 17, b"", status),
+        ("single-lf", false, 17, b"route\n", "route\n"),
+        ("two-lf", false, 17, diag.as_bytes(), diag),
+        ("lf-only", false, 17, b"\n", "\n"),
+        ("invalid", false, 17, &[255], utf8),
+        ("closed-success", true, 0, b"", pipe.as_str()),
+        ("closed-status", true, 17, b"", status),
+        ("closed-diagnostic", true, 17, diag.as_bytes(), diag),
+        ("closed-invalid", true, 17, &[255], utf8),
+    ] {
+        let dir = root.path().join(case);
+        fs::create_dir(&dir).unwrap();
+        let mut filemap = json!({"files":[]});
+        if closed {
+            fs::write(dir.join("close-input"), []).unwrap();
+            filemap["payload"] = json!("x".repeat(2 * 1024 * 1024));
+        }
+        let candidate =
+            json!({"commit":commit,"filemap":filemap,"projects":{"projects":[]},"artifacts":[]});
+        let query = json!({"previous":null,"candidate":candidate,"affected":[],"methods":{},"operations":[],"git":null});
+        fs::write(dir.join("query"), serde_json::to_vec(&query).unwrap()).unwrap();
+        let stdout = if case == "bad-json" {
+            String::new()
+        } else {
+            reply.to_string()
+        };
+        fs::write(dir.join("reply"), stdout).unwrap();
+        fs::write(dir.join("diagnostic"), stderr).unwrap();
+        fs::write(dir.join("status"), code.to_string()).unwrap();
+
+        let output = Command::new(std::env::var_os("CHRONO_TEST_ROUTES").unwrap())
+            .arg("source-plan-v1")
+            .current_dir(&dir)
+            .env_clear()
+            .env("PATH", root.path())
+            .env("ROUTES_RUNNER_RESPONSE", &dir)
+            .stdin(Stdio::from(fs::File::open(dir.join("query")).unwrap()))
+            .output()
+            .unwrap();
+        assert_eq!(
+            output.status.code(),
+            Some(if expected.is_empty() { 0 } else { 2 }),
+            "{case}"
+        );
+        assert_eq!(output.stderr, expected.as_bytes(), "{case}");
+        if expected.is_empty() {
+            assert_eq!(output.stdout, serde_json::to_vec(&reply).unwrap(), "{case}");
+        } else {
+            assert!(output.stdout.is_empty(), "{case}");
+        }
+        assert_eq!(
+            fs::read(dir.join("completed")).unwrap(),
+            b"source-coverage-v1",
+            "{case}"
+        );
+        if !closed {
+            let request = json!({"previous":null,"candidate":candidate,"affected":[],"scopes":[],"invocations":[],"git":{"mode":"legacy"}});
+            assert_eq!(
+                fs::read(dir.join("request")).unwrap(),
+                serde_json::to_vec(&request).unwrap(),
+                "{case}"
+            );
+        }
+    }
+}
+
+#[test]
 fn readiness_validates_only_the_supplied_action_assignments() {
     use chrono_judge_routes::plan_query::check_unit_assignments;
     use serde_json::{Value, json};
