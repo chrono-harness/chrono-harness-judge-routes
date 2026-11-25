@@ -1,5 +1,6 @@
 //! The process owner reads the command descriptor and transports the original byte streams.
 use crate::protocol::CommandSpec;
+use crate::verified_admission::{RunnerError, runner_response};
 use serde::Deserialize;
 use serde_json::Value;
 use std::{
@@ -49,16 +50,24 @@ fn call(
         (child.wait_with_output(), sender.join())
     });
     let out = output.map_err(|e| e.to_string())?;
-    if !out.status.success() {
-        let reason = String::from_utf8(out.stderr).map_err(|e| e.to_string())?;
-        return Err(if reason.is_empty() {
-            format!("chrono-harness {operation} {}", out.status)
-        } else {
-            reason.strip_suffix('\n').unwrap_or(&reason).into()
-        });
-    }
-    sent.map_err(|_| "runner request writer panicked")??;
-    Ok(out.stdout)
+    let sent = sent
+        .map_err(|_| "runner request writer panicked".to_owned())
+        .and_then(|result| result);
+    runner_response(out.status.success(), out.stdout, out.stderr, sent).map_err(|failure| {
+        match failure {
+            RunnerError::ExitStatus => format!("chrono-harness {operation} {}", out.status),
+            RunnerError::Request(error) => error,
+            RunnerError::Diagnostic(bytes) => match String::from_utf8(bytes) {
+                Ok(mut reason) => {
+                    if reason.ends_with('\n') {
+                        reason.pop();
+                    }
+                    reason
+                }
+                Err(error) => error.to_string(),
+            },
+        }
+    })
 }
 
 pub(crate) fn query(operation: &str, input: &Value) -> Result<Vec<u8>, String> {
