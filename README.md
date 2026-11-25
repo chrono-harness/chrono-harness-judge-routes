@@ -60,7 +60,7 @@ Registration readiness uses `chrono-judge-routes check-unit-assignments-v1`. It 
 
 ## 本地检查产物
 
-从主检出运行 `mise exec -- ./check.sh`。检查持有工作树租约，结束时控制台给出原报告路径。准备输入和原报告在 `.chrono-harness/state/preparation/`，单元结果在 `.chrono-harness/state/routes/`，汇总结果在 `.chrono-harness/state/collection/`。需要留存的文件应在当次滚动前复制到持久存储。GitHub Actions 对上传的单元结果和汇总结果各保留一天。
+从主检出运行 `mise exec -- ./check.sh`。检查持有工作树租约，结束时控制台给出原报告路径。输入、证明编译件和原报告在 `.chrono-harness/state/preparation/`，单元结果在 `.chrono-harness/state/routes/`，汇总结果在 `.chrono-harness/state/collection/`。需要留存的文件应在当次滚动前复制到持久存储。GitHub Actions 对上传的单元结果保留一天。汇总结果采用仓库的默认保留期，在本次核对的实际上传中约为 90 天。
 
 在长期使用的主检出完成 `mise trust` 和工具安装后，将以下命令登记到当前用户的系统定时器。用本机的主检出目录和 `command -v mise` 返回的绝对路径替换示例路径。以下 crontab 配置在本机时区每天 03:00 运行一次。
 
