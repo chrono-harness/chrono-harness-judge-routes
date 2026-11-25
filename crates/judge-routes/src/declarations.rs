@@ -108,11 +108,13 @@ impl Scheduling {
         let resources = named(&self.resources).ok_or(capacity_error)?;
         let mut ranks = BTreeMap::new();
         for (rank, name) in self.priority.iter().enumerate() {
-            if name.is_empty()
-                || name.contains('\0')
-                || !self.claims.contains_key(name)
-                || ranks.insert(name.as_str(), rank).is_some()
-            {
+            if !crate::verified_admission::record_priority(
+                &mut ranks,
+                name.as_str(),
+                name.as_bytes(),
+                self.claims.contains_key(name),
+                rank,
+            ) {
                 return Err(
                     "E_SCHEDULING: priority must list distinct registered operation IDs".into(),
                 );
@@ -158,10 +160,10 @@ impl Dispatch {
         let (max_running, ranks) = policy.indices(&plan.operations)?;
         if !ranks.is_empty() {
             order.sort_by_key(|i| {
-                ranks
-                    .get(plan.operations[*i].method.operation.as_str())
-                    .copied()
-                    .unwrap_or(usize::MAX)
+                crate::verified_admission::priority_key(
+                    &ranks,
+                    &plan.operations[*i].method.operation.as_str(),
+                )
             });
         }
         Ok(Self { max_running, order })

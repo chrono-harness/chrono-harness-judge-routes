@@ -885,6 +885,19 @@ fn dispatch_keeps_selected_priority_and_original_order_for_unranked_operations()
         dispatch(&scheduled),
         json!({"plan":scheduled.identity, "dispatch":{"max_running":2, "order":[3,1,0,2]}})
     );
+    let policy = scheduled.scheduling.as_ref().unwrap();
+    for invalid in [vec!["a", "a"], vec!["absent"], vec![""], vec!["a\0b"]] {
+        let mut invalid_policy = policy.clone();
+        invalid_policy.priority = invalid.into_iter().map(str::to_owned).collect();
+        let error = scheduled
+            .clone()
+            .with_scheduling(Some(invalid_policy))
+            .unwrap_err();
+        assert_eq!(
+            error,
+            "E_SCHEDULING: priority must list distinct registered operation IDs"
+        );
+    }
 }
 
 #[test]

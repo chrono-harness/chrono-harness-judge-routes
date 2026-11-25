@@ -18,6 +18,23 @@ fn expect(value: bool)
 { if !value { panic!(); } }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn dispatch_ranks_admit_distinct_claims_and_place_unranked_operations_last() {
+    let mut ranks = BTreeMap::<u8, usize>::new();
+    let good = [97u8, 98u8];
+    let bad = [97u8, 0u8, 98u8];
+    let empty: [u8; 0] = [];
+    expect(!policy::record_priority(&mut ranks, 1, &empty, true, 0));
+    expect(!policy::record_priority(&mut ranks, 1, &bad, true, 0));
+    expect(!policy::record_priority(&mut ranks, 1, &good, false, 0));
+    expect(policy::record_priority(&mut ranks, 2, &good, true, 0));
+    expect(policy::record_priority(&mut ranks, 1, &good, true, 1));
+    expect(policy::priority_key(&ranks, &2) == 0);
+    expect(policy::priority_key(&ranks, &1) == 1);
+    expect(policy::priority_key(&ranks, &3) == usize::MAX);
+    expect(!policy::record_priority(&mut ranks, 2, &good, true, 2));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn assignment_rejects_unknown_and_repeated_plans_without_changing_membership() {
     let mut plans = BTreeSet::<u64>::new();
     let mut assigned = BTreeSet::<u64>::new();
