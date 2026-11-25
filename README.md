@@ -62,11 +62,8 @@ Registration readiness uses `chrono-judge-routes check-unit-assignments-v1`. It 
 
 从主检出运行 `mise exec -- ./check.sh`。检查持有工作树租约，结束时控制台给出原报告路径。准备输入和原报告在 `.chrono-harness/state/preparation/`，单元结果在 `.chrono-harness/state/routes/`，汇总结果在 `.chrono-harness/state/collection/`。证明编译件和依赖清单位于本次执行报告所属目录。需要留存的文件应在当次滚动前复制到持久存储。GitHub Actions 对上传的单元结果保留一天。汇总结果采用仓库的默认保留期，在本次核对的实际上传中约为 90 天。
 
-在长期使用的主检出完成 `mise trust` 和工具安装后，将以下命令登记到当前用户的系统定时器。用本机的主检出目录和 `command -v mise` 返回的绝对路径替换示例路径。以下 crontab 配置在本机时区每天 03:00 运行一次。
-
-```cron
-0 3 * * * cd '/path/to/chrono-harness-judge-routes' && '/path/to/mise' exec -- chrono-worktree maintain --host-root . --config .chrono-harness/worktree.json
-```
+在主检出运行 `mise exec -- chrono-worktree maintain --host-root . --config .chrono-harness/worktree.json
+```` 可执行一轮工作树维护。独占执行者核对身份、租约与源码保全情况，然后回收符合条件的产物。
 
 每次维护统一清理本批次已登记的准备、单元、汇总和原生检查临时目录 `.chrono-harness/state/native-check/`。刚写入的文件也使用本批次截止时刻。工作树租约仍在使用时推迟到下一次能取得排他租约的维护。系统调度服务、主检出和工具必须在当时可用。首次登记时已存在的目录受保护，须核对内容、转存所需文件，再按工作树工具的历史缓存接管接口逐项采用。安装包位于 mise 共享目录，`.chrono-harness/bin/` 只包含本仓使用的工具链接。
 
