@@ -68,6 +68,6 @@ Registration readiness uses `chrono-judge-routes check-unit-assignments-v1`. It 
 0 3 * * * cd '/path/to/chrono-harness-judge-routes' && '/path/to/mise' exec -- chrono-worktree maintain --host-root . --config .chrono-harness/worktree.json
 ```
 
-每次维护统一清理本批次已登记的准备、单元、汇总和 `target/` 目录。刚写入的文件也使用本批次截止时刻。工作树租约仍在使用时推迟到下一次能取得排他租约的维护。系统调度服务、主检出和工具必须在当时可用。首次登记时已存在的目录受保护，须核对内容、转存所需文件，再按工作树工具的历史缓存接管接口逐项采用。安装包位于 mise 共享目录，`.chrono-harness/bin/` 只包含本仓使用的工具链接。
+每次维护统一清理本批次已登记的准备、单元、汇总和原生检查临时目录 `.chrono-harness/state/native-check/`。刚写入的文件也使用本批次截止时刻。工作树租约仍在使用时推迟到下一次能取得排他租约的维护。系统调度服务、主检出和工具必须在当时可用。首次登记时已存在的目录受保护，须核对内容、转存所需文件，再按工作树工具的历史缓存接管接口逐项采用。安装包位于 mise 共享目录，`.chrono-harness/bin/` 只包含本仓使用的工具链接。
 
 对新任务使用已登记的工作树。普通关联工作树满 23 小时可复用，超过 24 小时可在维护中回收。处置前会保全源码和 Git 改动。工作树操作记录以一天为保留窗口，仍被当前登记或当前代处置收据引用的原件继续保管。历史记录与报告的清理条件由已安装的工作树工具负责。

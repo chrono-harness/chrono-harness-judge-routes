@@ -17,7 +17,7 @@
       "disposition": "dispose"
     },
     {
-      "path": "target/",
+      "path": ".chrono-harness/state/native-check/",
       "disposition": "dispose"
     },
     {

@@ -240,6 +240,12 @@
       "owner": "host",
       "kind": "worktree-record",
       "tracked": false
+    },
+    {
+      "path": ".chrono-harness/state/native-check/",
+      "owner": "host",
+      "kind": "build",
+      "tracked": false
     }
   ]
 }
