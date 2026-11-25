@@ -1,5 +1,5 @@
 //! Decisions used by the route planner and the reader of retained process receipts.
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
@@ -14,6 +14,40 @@ pub use crate::units::{PlanAssignment, assign_plan, shared_operation_matches, va
 pub use units::{PlanAssignment, assign_plan, shared_operation_matches, valid_shared_row};
 
 verus! {
+
+/// Admit each claimed priority ID at the rank given by its registration order.
+pub fn record_priority<K: Ord>(ranks: &mut BTreeMap<K, usize>, id: K, name: &[u8], claimed: bool, rank: usize)
+    -> (fresh: bool)
+    requires vstd::laws_cmp::obeys_cmp::<K>(),
+    ensures
+        fresh == (claimed && name.len() > 0 && !name@.contains(0u8) && !old(ranks)@.contains_key(id)),
+        ranks@ == (if claimed && name.len() > 0 && !name@.contains(0u8) {
+            old(ranks)@.insert(id, rank)
+        } else { old(ranks)@ }),
+{
+    if !claimed || name.len() == 0 { return false; }
+    let mut i = 0;
+    while i < name.len()
+        invariant i <= name.len(), forall|j: int| 0 <= j < i ==> name@[j] != 0u8,
+        decreases name.len() - i,
+    {
+        if name[i] == 0 {
+            assert(name@.contains(0u8));
+            return false;
+        }
+        i += 1;
+    }
+    assert(!name@.contains(0u8));
+    ranks.insert(id, rank).is_none()
+}
+
+/// Stable sorting keeps equal keys (the unranked suffix) in plan order.
+pub fn priority_key<K: Ord>(ranks: &BTreeMap<K, usize>, id: &K) -> (key: usize)
+    requires vstd::laws_cmp::obeys_cmp::<K>(),
+    ensures key == (if ranks@.contains_key(*id) { ranks@[*id] } else { usize::MAX }),
+{
+    match ranks.get(id) { Some(rank) => *rank, None => usize::MAX }
+}
 
 pub fn insert_once<K: Ord>(seen: &mut BTreeSet<K>, id: K) -> (fresh: bool)
     requires vstd::laws_cmp::obeys_cmp::<K>(),
