@@ -31,6 +31,18 @@
     {
       "path": ".chrono-harness/state/routes/",
       "disposition": "dispose"
+    },
+    {
+      "path": ".chrono-harness/state/worktrees/",
+      "disposition": "finish-dispose"
+    },
+    {
+      "path": ".chrono-harness/state/origins/",
+      "disposition": "finish-dispose"
+    },
+    {
+      "path": ".chrono-harness/state/local/",
+      "disposition": "finish-dispose"
     }
   ],
   "terminal_history": {

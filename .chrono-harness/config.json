@@ -222,6 +222,24 @@
       "owner": "host",
       "kind": "check-result",
       "tracked": false
+    },
+    {
+      "path": ".chrono-harness/state/worktrees/",
+      "owner": "host",
+      "kind": "worktree-record",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/state/origins/",
+      "owner": "host",
+      "kind": "worktree-record",
+      "tracked": false
+    },
+    {
+      "path": ".chrono-harness/state/local/",
+      "owner": "host",
+      "kind": "worktree-record",
+      "tracked": false
     }
   ]
 }
