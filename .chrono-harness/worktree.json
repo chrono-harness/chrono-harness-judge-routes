@@ -1,8 +1,8 @@
 {
-  "schema": "chrono-worktree-config/v2",
+  "schema": "chrono-worktree-config/v3",
   "host_config": ".chrono-harness/config.json",
-  "diagnostics_program": ".chrono-harness/bin/chrono-diagnostics",
-  "registration_program": ".chrono-harness/bin/chrono-judge-registration",
+  "diagnostics_program": "chrono-diagnostics",
+  "registration_program": "chrono-judge-registration",
   "remote": "origin",
   "git": {
     "program": "git",
@@ -30,5 +30,6 @@
       "feature": "integration",
       "integration": "integration"
     }
-  }
+  },
+  "automatic_cleanup": ".chrono-harness/cleanup.json"
 }

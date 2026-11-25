@@ -77,6 +77,22 @@
       }
     },
     {
+      "path": ".chrono-harness/cleanup.json",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
+    },
+    {
       "path": ".chrono-harness/config.json",
       "owner": "host",
       "surface": "product",
