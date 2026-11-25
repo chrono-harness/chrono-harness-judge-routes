@@ -350,21 +350,9 @@ fn prepare_inner(
     plan.identity = plan.digest()?;
     Ok(plan)
 }
-/// Pure validation of successful retained observations, shared with full consumers.
 #[cfg(not(verus_keep_ghost))]
-pub fn process_success(p: &ProcessResult) -> Result<(), String> {
-    if p.exit_code != 0
-        || p.failure.is_some()
-        || p.stdout_sha256 != crate::sha256(&p.stdout_bytes)
-        || p.stderr_sha256 != crate::sha256(&p.stderr_bytes)
-        || p.stdout != String::from_utf8_lossy(&p.stdout_bytes)
-        || p.stderr != String::from_utf8_lossy(&p.stderr_bytes)
-        || p.environment_digest != crate::digest(&p.environment)?
-    {
-        return Err("E_PROCESS_EVIDENCE: unsuccessful or inconsistent retained process".into());
-    }
-    Ok(())
-}
+pub use verified_admission::process_success;
+
 /// Construct the current global declaration graph without observing any business executable.
 #[cfg(not(verus_keep_ghost))]
 pub fn prepare_collection(
@@ -438,12 +426,8 @@ fn validate_tool_inner(
         || actual.argv != invocation
         || actual.cwd != root
         || actual.environment != *env
-        || actual.environment_digest != digest(env)?
-        || actual.failure.is_some()
-        || actual.exit_code != 0
         || expected.is_none()
         || expected != Some(actual.stdout.trim_end())
-        || actual.stdout_sha256 != crate::sha256(&actual.stdout_bytes)
         || actual.stdout.as_bytes() != actual.stdout_bytes
         || live
             && fs::read(&tool.path)
