@@ -59,11 +59,11 @@ jobs:
           binary="$CARGO_TARGET_DIR/release/chrono-judge-routes"
           jq -n --slurpfile docs crates/judge-routes-tests/tests/fixtures/selection-registries.json \
             '{config:".chrono-harness/config.json",base:$docs[0],candidate:$docs[0],tests:["test:example","test:example"],retired_tests:[]}' \
-            | "$binary" global-selection | jq -e '. == ["test:example"]'
+            | "$binary" global-selection > "$RUNNER_TEMP/selection-result"
           code=0
           "$binary" global-selection <<< '{}' 2>"$RUNNER_TEMP/selection-error" || code=$?
-          test "$code" = 2
-          test -s "$RUNNER_TEMP/selection-error"
+          cargo run --quiet --locked --release --manifest-path crates/judge-routes-tests/Cargo.toml \
+            --example release_observation -- "$code" "$RUNNER_TEMP/selection-error" "$RUNNER_TEMP/selection-result"
           mkdir "$RUNNER_TEMP/dist"
           cp "$CARGO_TARGET_DIR/release/chrono-judge-routes" "$RUNNER_TEMP/dist/chrono-judge-routes-$PLATFORM"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
