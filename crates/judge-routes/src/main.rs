@@ -2,6 +2,7 @@
 #![allow(unexpected_cfgs)]
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
+use vstd::contrib::exec_spec::ExecSpecEq;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
