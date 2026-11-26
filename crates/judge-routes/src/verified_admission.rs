@@ -6,6 +6,10 @@ use verus_builtin_macros::verus;
 use vstd::prelude::*;
 
 #[cfg(verus_keep_ghost)]
+#[path = "lib.rs"]
+mod library;
+
+#[cfg(verus_keep_ghost)]
 #[path = "units.rs"]
 mod units;
 #[cfg(not(verus_keep_ghost))]

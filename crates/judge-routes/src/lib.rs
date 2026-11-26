@@ -2,23 +2,64 @@
 // Routes owns method planning and comparison with runner-produced observations.
 #[cfg(not(verus_keep_ghost))]
 mod commands;
+#[cfg(not(verus_keep_ghost))]
 pub use commands::runner_program;
+#[cfg(not(verus_keep_ghost))]
 pub mod evidence;
+#[cfg(not(verus_keep_ghost))]
 mod units;
+#[cfg(not(verus_keep_ghost))]
 pub use evidence::{CompiledArtifact, OutputContract, ProcessResult, Tool};
+#[cfg(not(verus_keep_ghost))]
 pub mod protocol;
+#[cfg(not(verus_keep_ghost))]
 use protocol::{Request, Scope};
 
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+
+/// ASCII encoding of one hexadecimal digit of a digest.
+fn hex_digit(n: u8) -> (digit: u8)
+    requires n < 16,
+    ensures digit as int == if n < 10 { 48 + n as int } else { 87 + n as int },
+{
+    if n < 10 { 48 + n } else { 87 + n }
+}
+
+pub(crate) fn hex_pair(byte: u8) -> (digits: (u8, u8))
+    ensures
+        digits.0 as int == if byte / 16 < 10 { 48 + byte as int / 16 } else { 87 + byte as int / 16 },
+        digits.1 as int == if byte % 16 < 10 { 48 + byte as int % 16 } else { 87 + byte as int % 16 },
+{
+    (hex_digit(byte / 16), hex_digit(byte % 16))
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 pub fn sha256(bytes: &[u8]) -> String {
     use sha2::{Digest, Sha256};
-    format!("{:x}", Sha256::digest(bytes))
+    let mut encoded = String::with_capacity(64);
+    for byte in Sha256::digest(bytes) {
+        let (high, low) = hex_pair(byte);
+        encoded.push(char::from(high));
+        encoded.push(char::from(low));
+    }
+    encoded
 }
+#[cfg(not(verus_keep_ghost))]
 pub fn digest<T: serde::Serialize>(v: &T) -> Result<String, String> {
     Ok(sha256(&serde_jcs::to_vec(v).map_err(|e| e.to_string())?))
 }
 
+#[cfg(not(verus_keep_ghost))]
 mod declarations;
+#[cfg(not(verus_keep_ghost))]
 pub mod verified_admission;
+#[cfg(not(verus_keep_ghost))]
 pub mod verified_bounds;
 #[cfg(not(verus_keep_ghost))]
 pub use declarations::{Plan, Scheduling};
@@ -456,6 +497,7 @@ pub fn validate_invocation(
     serde_json::from_slice::<()>(&bytes).map_err(|e| e.to_string())
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn canonical(req: &Request, config: &Value) -> Result<(), String> {
     let bytes = registration::runner(
         &req.candidate.root,
@@ -680,6 +722,7 @@ pub fn judge(input: impl std::io::Read) -> Result<Value, String> {
     Ok(json!({"status":status,"findings":findings,"outputs":outputs}))
 }
 
+#[cfg(not(verus_keep_ghost))]
 mod impact;
 #[cfg(not(verus_keep_ghost))]
 pub mod plan_query;
@@ -704,6 +747,7 @@ fn artifact_directories(config: &Value) -> Result<Vec<&str>, String> {
         .collect()
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn evaluate(req: &Request, git: &mut Value) -> Result<BTreeMap<String, Value>, String> {
     let views = registration::views(req, git)?;
     let old = views.base;
