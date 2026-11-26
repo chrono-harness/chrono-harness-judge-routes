@@ -17,6 +17,10 @@ pub use units::{PlanAssignment, assign_plan, shared_operation_matches, valid_sha
 #[path = "main.rs"]
 pub mod cli;
 
+#[cfg(verus_keep_ghost)]
+#[path = "source_plan.rs"]
+pub mod source_plan;
+
 verus! {
 
 /// Business outcome of a joined runner subprocess and its completed request writer.
