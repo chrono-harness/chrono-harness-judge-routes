@@ -236,7 +236,11 @@
           "kind": "test-execution",
           "to": "test:judge-routes-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
     },
     {
       "path": ".config/mise/conf.d/selected-chrono-harness.toml",
