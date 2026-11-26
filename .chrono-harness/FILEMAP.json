@@ -521,7 +521,11 @@
           "kind": "test-execution",
           "to": "test:judge-routes-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
     },
     {
       "path": "crates/judge-routes-tests/examples/release_observation.rs",
