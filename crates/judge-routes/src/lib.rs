@@ -595,39 +595,44 @@ fn compare_operation_receipt(
         plan_identity,
         &r.operation,
         &op.method.operation,
-    ) || r.method != digest(&op.method)?
-        || r.digest != r.identity()?
-        || p.cwd != root
-        || p.executable != tool.path
-        || p.sha256 != tool.sha256
-        || &p.environment != environment
-        || p.environment_digest != digest(environment)?
-        || p.stdin_sha256 != crate::sha256(&[])
-        || !verified_admission::output_sizes_fit(
-            p.stdout_bytes.len(),
-            p.stderr_bytes.len(),
-            op.output_limit_bytes,
-        )
-        || !verified_admission::stream_matches(
-            &p.stdout_sha256,
-            &crate::sha256(&p.stdout_bytes),
-            p.stdout == String::from_utf8_lossy(&p.stdout_bytes),
-        )
-        || !verified_admission::stream_matches(
-            &p.stderr_sha256,
-            &crate::sha256(&p.stderr_bytes),
-            p.stderr == String::from_utf8_lossy(&p.stderr_bytes),
-        )
-    {
+    ) || !verified_admission::receipt_seal_matches(
+        &r.method,
+        digest(&op.method),
+        &r.digest,
+        || r.identity(),
+    )? || !verified_admission::receipt_tool_matches(
+        p.cwd == root && p.executable == tool.path,
+        &p.sha256,
+        &tool.sha256,
+    ) || !verified_admission::receipt_input_matches(
+        &p.environment == environment,
+        &p.environment_digest,
+        || digest(environment),
+        &p.stdin_sha256,
+        || crate::sha256(&[]),
+    )? || !verified_admission::output_sizes_fit(
+        p.stdout_bytes.len(),
+        p.stderr_bytes.len(),
+        op.output_limit_bytes,
+    ) || !verified_admission::stream_matches(
+        &p.stdout_sha256,
+        &crate::sha256(&p.stdout_bytes),
+        p.stdout == String::from_utf8_lossy(&p.stdout_bytes),
+    ) || !verified_admission::stream_matches(
+        &p.stderr_sha256,
+        &crate::sha256(&p.stderr_bytes),
+        p.stderr == String::from_utf8_lossy(&p.stderr_bytes),
+    ) {
         return Err(problem(
             "E_RECEIPT_MISMATCH",
             "plan/method/tool/cwd/input/environment/output",
         ));
     }
-    if op.method.output_contract.is_none()
-        && r.compiler_dependency.is_none()
-        && r.compiler_artifact.is_none()
-    {
+    if !verified_admission::compiler_check_required(
+        op.method.output_contract.is_some(),
+        r.compiler_dependency.is_some(),
+        r.compiler_artifact.is_some(),
+    ) {
         return Ok(());
     }
     evidence::compiler(json!({"operation":"check","contract":op.method.output_contract,"stdout":p.stdout_bytes,
