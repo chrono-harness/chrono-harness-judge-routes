@@ -38,6 +38,7 @@ fn documented_commands_and_arity(name: &str, extra: bool) {
     reveal_strlit("scoped-operations-v1");
     reveal_strlit("prepare-scoped-plan-v1");
     let result = command(name, extra);
+    proof {
     if name@ == "--version"@ {
         assert((result is Version) == !extra);
         assert((result is Judge) == extra);
@@ -77,6 +78,7 @@ fn documented_commands_and_arity(name: &str, extra: bool) {
         assert(if extra { result is Usage } else { result matches Command::Query(Query::PrepareScopedPlan) });
     } else {
         assert(result is Judge);
+    }
     }
 }
 
