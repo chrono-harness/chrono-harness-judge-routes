@@ -19,6 +19,9 @@ use chrono_judge_routes::source_plan::{Reply, bind_coverage_reply};
 #[cfg(verus_keep_ghost)]
 use policy::source_plan::{Reply, bind_coverage_reply};
 
+#[path = "../../../.chrono-harness/ci/roadmap.rs"]
+mod roadmap;
+
 verus! {
 
 fn check_coverage_reply(previous: Option<&str>, candidate: &str, old: Option<String>,

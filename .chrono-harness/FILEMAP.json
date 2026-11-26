@@ -66,6 +66,27 @@
       ]
     },
     {
+      "path": ".chrono-harness/ci/roadmap.rs",
+      "owner": "host",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes-tests/tests/verified_admission.rs",
+            "operation": "verify.route-admission-tests"
+          }
+        ]
+      }
+    },
+    {
       "path": ".chrono-harness/ci/units.json",
       "owner": "host",
       "surface": "product",
@@ -236,7 +257,11 @@
           "kind": "test-execution",
           "to": "test:judge-routes-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
     },
     {
       "path": ".config/mise/conf.d/selected-chrono-harness.toml",
@@ -249,28 +274,6 @@
           "to": "test:judge-routes-tests"
         }
       ]
-    },
-    {
-      "path": ".github/workflows/dependabot-auto-merge.yml",
-      "owner": "host",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [],
-      "verification": {
-        "role": "data",
-        "roots": []
-      }
-    },
-    {
-      "path": ".github/dependabot.yml",
-      "owner": "host",
-      "surface": "product",
-      "cost": "unmeasured",
-      "edges": [],
-      "verification": {
-        "role": "data",
-        "roots": []
-      }
     },
     {
       "path": ".github/ISSUE_TEMPLATE/bug.yml",
@@ -328,18 +331,52 @@
       }
     },
     {
+      "path": ".github/dependabot.yml",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
+    },
+    {
       "path": ".github/roadmap.cjs",
       "owner": "host",
       "surface": "product",
       "cost": "unmeasured",
-      "edges": []
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes-tests/tests/verified_admission.rs",
+            "operation": "verify.route-admission-tests"
+          }
+        ]
+      }
     },
     {
-      "path": ".github/workflows/issue-roadmap.yml",
+      "path": ".github/workflows/actions.lock",
       "owner": "host",
       "surface": "product",
       "cost": "unmeasured",
-      "edges": []
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
     },
     {
       "path": ".github/workflows/check.yml",
@@ -351,7 +388,43 @@
           "kind": "test-execution",
           "to": "test:judge-routes-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
+    },
+    {
+      "path": ".github/workflows/dependabot-auto-merge.yml",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
+    },
+    {
+      "path": ".github/workflows/issue-roadmap.yml",
+      "owner": "host",
+      "surface": "product",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes-tests/tests/verified_admission.rs",
+            "operation": "verify.route-admission-tests"
+          }
+        ]
+      }
     },
     {
       "path": ".github/workflows/release.yml",
@@ -448,7 +521,32 @@
           "kind": "test-execution",
           "to": "test:judge-routes-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "data",
+        "roots": []
+      }
+    },
+    {
+      "path": "crates/judge-routes-tests/examples/release_observation.rs",
+      "owner": "judge-routes-tests",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes-tests/tests/verified_admission.rs",
+            "operation": "verify.route-admission-tests"
+          }
+        ]
+      }
     },
     {
       "path": "crates/judge-routes-tests/tests/fixtures/selection-registries.json",
@@ -557,27 +655,6 @@
           "to": "test:judge-routes-tests"
         }
       ]
-    },
-    {
-      "path": "crates/judge-routes-tests/examples/release_observation.rs",
-      "owner": "judge-routes-tests",
-      "surface": "test",
-      "cost": "unmeasured",
-      "edges": [
-        {
-          "kind": "test-execution",
-          "to": "test:judge-routes-tests"
-        }
-      ],
-      "verification": {
-        "role": "program",
-        "roots": [
-          {
-            "path": "crates/judge-routes-tests/tests/verified_admission.rs",
-            "operation": "verify.route-admission-tests"
-          }
-        ]
-      }
     },
     {
       "path": "crates/judge-routes-tests/tests/verified_admission.rs",
