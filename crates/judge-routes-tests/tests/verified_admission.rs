@@ -14,7 +14,46 @@ use vstd::{prelude::*, vpanic as panic};
 #[path = "../examples/release_observation.rs"]
 mod release_observation;
 
+#[cfg(not(verus_keep_ghost))]
+use chrono_judge_routes::source_plan::{Reply, bind_coverage_reply};
+#[cfg(verus_keep_ghost)]
+use policy::source_plan::{Reply, bind_coverage_reply};
+
 verus! {
+
+fn check_coverage_reply(previous: Option<&str>, candidate: &str, old: Option<String>,
+    reported: String, facts: u8, error: Option<String>) {
+    let previous_equal = match (previous, &old) {
+        (Some(wanted), Some(seen)) => wanted.to_string() == *seen,
+        _ => previous.is_none() && old.is_none(),
+    };
+    let candidate_equal = candidate.to_string() == reported;
+    let reply = Reply { previous: old, candidate: reported, git_facts: facts, error };
+    let result = bind_coverage_reply(previous, candidate, reply);
+    match result {
+        Ok(kept) => {
+            expect(candidate_equal && previous_equal);
+            expect(kept.git_facts == facts);
+            assert(kept.previous == old && kept.candidate == reported && kept.error == error);
+        },
+        Err(reason) => {
+            expect(!candidate_equal || !previous_equal);
+            expect(reason.to_string() == "E_GIT_FACTS: source coverage endpoint identity mismatch".to_string());
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn coverage_replies_keep_matching_endpoints_and_reject_replacements_or_omissions() {
+    check_coverage_reply(None, "head", None, "head".to_string(), 0, None);
+    check_coverage_reply(Some("base"), "head", Some("base".to_string()), "head".to_string(),
+        255, Some("coverage error".to_string()));
+    check_coverage_reply(None, "head", Some("base".to_string()), "head".to_string(), 1, None);
+    check_coverage_reply(Some("base"), "head", None, "head".to_string(), 2, None);
+    check_coverage_reply(Some("base"), "head", Some("wrong".to_string()), "head".to_string(), 3, None);
+    check_coverage_reply(Some("base"), "head", Some("base".to_string()), "other".to_string(), 4, None);
+    check_coverage_reply(Some("base"), "head", Some("wrong".to_string()), "other".to_string(), 5, None);
+}
 
 #[cfg(verus_keep_ghost)]
 fn documented_commands_and_arity(name: &str, extra: bool) {
