@@ -66,6 +66,27 @@
       ]
     },
     {
+      "path": ".chrono-harness/ci/roadmap.rs",
+      "owner": "host",
+      "surface": "test",
+      "cost": "unmeasured",
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes-tests/tests/verified_admission.rs",
+            "operation": "verify.route-admission-tests"
+          }
+        ]
+      }
+    },
+    {
       "path": ".chrono-harness/ci/units.json",
       "owner": "host",
       "surface": "product",
@@ -325,7 +346,21 @@
       "owner": "host",
       "surface": "product",
       "cost": "unmeasured",
-      "edges": []
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes-tests/tests/verified_admission.rs",
+            "operation": "verify.route-admission-tests"
+          }
+        ]
+      }
     },
     {
       "path": ".github/workflows/actions.lock",
@@ -375,7 +410,21 @@
       "owner": "host",
       "surface": "product",
       "cost": "unmeasured",
-      "edges": []
+      "edges": [
+        {
+          "kind": "test-execution",
+          "to": "test:judge-routes-tests"
+        }
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes-tests/tests/verified_admission.rs",
+            "operation": "verify.route-admission-tests"
+          }
+        ]
+      }
     },
     {
       "path": ".github/workflows/release.yml",
