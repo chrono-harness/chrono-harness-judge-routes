@@ -27,7 +27,7 @@ fn hex_digit(n: u8) -> (digit: u8)
     requires n < 16,
     ensures digit as int == if n < 10 { 48 + n as int } else { 87 + n as int },
 {
-    if n < 10 { b'0' + n } else { b'a' + (n - 10) }
+    if n < 10 { 48 + n } else { 87 + n }
 }
 
 pub(crate) fn hex_pair(byte: u8) -> (digits: (u8, u8))
