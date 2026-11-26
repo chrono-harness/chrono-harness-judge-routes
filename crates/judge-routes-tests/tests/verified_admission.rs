@@ -342,3 +342,16 @@ fn tool_probe_requires_both_streams_before_reading_the_environment() {
 }
 
 }
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn public_digest_preserves_sha256_and_canonical_key_order() {
+    use chrono_judge_routes::{digest, sha256};
+
+    assert_eq!(
+        sha256(b"abc"),
+        "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
+    );
+    let value: serde_json::Value = serde_json::from_str(r#"{"z":2,"a":1}"#).unwrap();
+    assert_eq!(digest(&value).unwrap(), sha256(br#"{"a":1,"z":2}"#));
+}
