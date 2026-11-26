@@ -19,6 +19,24 @@ verus! {
 #[cfg(verus_keep_ghost)]
 fn documented_commands_and_arity(name: &str, extra: bool) {
     use policy::cli::{command, Query, Command};
+    reveal_strlit("--version");
+    reveal_strlit("evaluate-routes-v1");
+    reveal_strlit("global-selection");
+    reveal_strlit("collected-selection-v1");
+    reveal_strlit("check-plan-receipts-v1");
+    reveal_strlit("check-operation-receipt-v1");
+    reveal_strlit("plan-context-v1");
+    reveal_strlit("collection-plan-v1");
+    reveal_strlit("full-operations-v1");
+    reveal_strlit("source-plan-v1");
+    reveal_strlit("check-unit-assignments-v1");
+    reveal_strlit("unit-declarations-v1");
+    reveal_strlit("retained-tool-v1");
+    reveal_strlit("check-plan-v1");
+    reveal_strlit("dispatch-plan-v1");
+    reveal_strlit("check-scoped-plan-v1");
+    reveal_strlit("scoped-operations-v1");
+    reveal_strlit("prepare-scoped-plan-v1");
     let result = command(name, extra);
     if name@ == "--version"@ {
         assert((result is Version) == !extra);
