@@ -16,6 +16,57 @@ mod release_observation;
 
 verus! {
 
+#[cfg(verus_keep_ghost)]
+fn documented_commands_and_arity(name: &str, extra: bool) {
+    use policy::cli::{command, Query, Command};
+    let result = command(name, extra);
+    proof {
+        let named = name@ == "evaluate-routes-v1"@
+            || name@ == "global-selection"@
+            || name@ == "collected-selection-v1"@
+            || name@ == "check-plan-receipts-v1"@
+            || name@ == "check-operation-receipt-v1"@
+            || name@ == "plan-context-v1"@
+            || name@ == "collection-plan-v1"@
+            || name@ == "full-operations-v1"@
+            || name@ == "source-plan-v1"@
+            || name@ == "check-unit-assignments-v1"@
+            || name@ == "unit-declarations-v1"@
+            || name@ == "retained-tool-v1"@
+            || name@ == "check-plan-v1"@
+            || name@ == "dispatch-plan-v1"@
+            || name@ == "check-scoped-plan-v1"@
+            || name@ == "scoped-operations-v1"@
+            || name@ == "prepare-scoped-plan-v1"@;
+        assert((result is Version) == (name@ == "--version"@ && !extra));
+        assert((result is Judge) == (!named && (name@ != "--version"@ || extra)));
+        assert((result is Usage) == (named && extra));
+        assert((result is Query) == (named && !extra));
+        if let Command::Query(query) = result {
+            match query {
+                Query::Evaluate => assert(name@ == "evaluate-routes-v1"@),
+                Query::GlobalSelection => assert(name@ == "global-selection"@),
+                Query::CollectedSelection => assert(name@ == "collected-selection-v1"@),
+                Query::PlanReceipts => assert(name@ == "check-plan-receipts-v1"@),
+                Query::OperationReceipt => assert(name@ == "check-operation-receipt-v1"@),
+                Query::PlanContext => assert(name@ == "plan-context-v1"@),
+                Query::CollectionPlan => assert(name@ == "collection-plan-v1"@),
+                Query::FullOperations => assert(name@ == "full-operations-v1"@),
+                Query::SourcePlan => assert(name@ == "source-plan-v1"@),
+                Query::UnitAssignments => assert(name@ == "check-unit-assignments-v1"@),
+                Query::UnitDeclarations => assert(name@ == "unit-declarations-v1"@),
+                Query::RetainedTool => assert(name@ == "retained-tool-v1"@),
+                Query::CheckPlan => assert(name@ == "check-plan-v1"@),
+                Query::DispatchPlan => assert(name@ == "dispatch-plan-v1"@),
+                Query::ScopedPlan => assert(name@ == "check-scoped-plan-v1"@),
+                Query::ScopedOperations => assert(name@ == "scoped-operations-v1"@),
+                Query::PrepareScopedPlan => assert(name@ == "prepare-scoped-plan-v1"@),
+            }
+        }
+    }
+}
+
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn release_accepts_the_expected_observations_only() {
     let accepted = release_observation::accepts(2, 4, Some(1), true);
