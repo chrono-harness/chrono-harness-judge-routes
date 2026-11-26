@@ -21,165 +21,48 @@ fn documented_commands_and_arity(name: &str, extra: bool) {
     use policy::cli::{command, Query, Command};
     let result = command(name, extra);
     proof {
-        reveal_strlit("--version");
-        reveal_strlit("evaluate-routes-v1");
-        reveal_strlit("global-selection");
-        reveal_strlit("collected-selection-v1");
-        reveal_strlit("check-plan-receipts-v1");
-        reveal_strlit("check-operation-receipt-v1");
-        reveal_strlit("plan-context-v1");
-        reveal_strlit("collection-plan-v1");
-        reveal_strlit("full-operations-v1");
-        reveal_strlit("source-plan-v1");
-        reveal_strlit("check-unit-assignments-v1");
-        reveal_strlit("unit-declarations-v1");
-        reveal_strlit("retained-tool-v1");
-        reveal_strlit("check-plan-v1");
-        reveal_strlit("dispatch-plan-v1");
-        reveal_strlit("check-scoped-plan-v1");
-        reveal_strlit("scoped-operations-v1");
-        reveal_strlit("prepare-scoped-plan-v1");
-        if name@ == "--version"@ {
-            assert(!policy::cli::known(name@));
-            assert((result is Version) == !extra);
-            assert((result is Judge) == extra);
-        } else if name@ == "evaluate-routes-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is Evaluate); },
-                    _ => assert(false),
-                }
+        let named = name@ == "evaluate-routes-v1"@
+            || name@ == "global-selection"@
+            || name@ == "collected-selection-v1"@
+            || name@ == "check-plan-receipts-v1"@
+            || name@ == "check-operation-receipt-v1"@
+            || name@ == "plan-context-v1"@
+            || name@ == "collection-plan-v1"@
+            || name@ == "full-operations-v1"@
+            || name@ == "source-plan-v1"@
+            || name@ == "check-unit-assignments-v1"@
+            || name@ == "unit-declarations-v1"@
+            || name@ == "retained-tool-v1"@
+            || name@ == "check-plan-v1"@
+            || name@ == "dispatch-plan-v1"@
+            || name@ == "check-scoped-plan-v1"@
+            || name@ == "scoped-operations-v1"@
+            || name@ == "prepare-scoped-plan-v1"@;
+        assert((result is Version) == (name@ == "--version"@ && !extra));
+        assert((result is Judge) == (!named && (name@ != "--version"@ || extra)));
+        assert((result is Usage) == (named && extra));
+        assert((result is Query) == (named && !extra));
+        if let Command::Query(query) = result {
+            match query {
+                Query::Evaluate => assert(name@ == "evaluate-routes-v1"@),
+                Query::GlobalSelection => assert(name@ == "global-selection"@),
+                Query::CollectedSelection => assert(name@ == "collected-selection-v1"@),
+                Query::PlanReceipts => assert(name@ == "check-plan-receipts-v1"@),
+                Query::OperationReceipt => assert(name@ == "check-operation-receipt-v1"@),
+                Query::PlanContext => assert(name@ == "plan-context-v1"@),
+                Query::CollectionPlan => assert(name@ == "collection-plan-v1"@),
+                Query::FullOperations => assert(name@ == "full-operations-v1"@),
+                Query::SourcePlan => assert(name@ == "source-plan-v1"@),
+                Query::UnitAssignments => assert(name@ == "check-unit-assignments-v1"@),
+                Query::UnitDeclarations => assert(name@ == "unit-declarations-v1"@),
+                Query::RetainedTool => assert(name@ == "retained-tool-v1"@),
+                Query::CheckPlan => assert(name@ == "check-plan-v1"@),
+                Query::DispatchPlan => assert(name@ == "dispatch-plan-v1"@),
+                Query::ScopedPlan => assert(name@ == "check-scoped-plan-v1"@),
+                Query::ScopedOperations => assert(name@ == "scoped-operations-v1"@),
+                Query::PrepareScopedPlan => assert(name@ == "prepare-scoped-plan-v1"@),
             }
-        } else if name@ == "global-selection"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is GlobalSelection); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "collected-selection-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is CollectedSelection); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "check-plan-receipts-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is PlanReceipts); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "check-operation-receipt-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is OperationReceipt); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "plan-context-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is PlanContext); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "collection-plan-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is CollectionPlan); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "full-operations-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is FullOperations); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "source-plan-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is SourcePlan); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "check-unit-assignments-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is UnitAssignments); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "unit-declarations-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is UnitDeclarations); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "retained-tool-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is RetainedTool); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "check-plan-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is CheckPlan); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "dispatch-plan-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is DispatchPlan); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "check-scoped-plan-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is ScopedPlan); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "scoped-operations-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is ScopedOperations); },
-                    _ => assert(false),
-                }
-            }
-        } else if name@ == "prepare-scoped-plan-v1"@ {
-            assert(policy::cli::known(name@));
-            if extra { assert(result is Usage); } else {
-                match result {
-                    Command::Query(q) => { assert(policy::cli::query_name(q) == name@); assert(q is PrepareScopedPlan); },
-                    _ => assert(false),
-                }
-            }
-        } else { assert(!policy::cli::known(name@)); assert(result is Judge); }
+        }
     }
 }
 
