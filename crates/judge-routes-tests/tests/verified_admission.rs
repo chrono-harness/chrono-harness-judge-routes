@@ -355,3 +355,27 @@ fn public_digest_preserves_sha256_and_canonical_key_order() {
     let value: serde_json::Value = serde_json::from_str(r#"{"z":2,"a":1}"#).unwrap();
     assert_eq!(digest(&value).unwrap(), sha256(br#"{"a":1,"z":2}"#));
 }
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn plan_identity_accepts_the_largest_admitted_timeout() {
+    use chrono_judge_routes::{Method, Operation, digest, verified_bounds::valid_execution_bounds};
+
+    let operation = Operation {
+        method: Method {
+            owner: "example".into(),
+            operation: "check".into(),
+            tool: "example-tool".into(),
+            argv: Vec::new(),
+            output_contract: None,
+        },
+        predecessors: BTreeSet::new(),
+        timeout_seconds: u64::MAX,
+        output_limit_bytes: 1,
+    };
+    assert!(valid_execution_bounds(
+        operation.timeout_seconds,
+        operation.output_limit_bytes
+    ));
+    digest(&operation).expect("each admitted operation must have a plan identity");
+}
