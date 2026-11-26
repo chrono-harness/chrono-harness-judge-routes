@@ -18,17 +18,16 @@ mod release_observation;
 use chrono_judge_routes::source_plan::{Reply, bind_coverage_reply};
 #[cfg(verus_keep_ghost)]
 use policy::source_plan::{Reply, bind_coverage_reply};
-use vstd::contrib::exec_spec::ExecSpecEq;
 
 verus! {
 
 fn check_coverage_reply(previous: Option<&str>, candidate: &str, old: Option<String>,
     reported: String, facts: u8, error: Option<String>) {
     let previous_equal = match (previous, &old) {
-        (Some(wanted), Some(seen)) => <&str>::exec_eq(wanted, seen.as_str()),
+        (Some(wanted), Some(seen)) => wanted.to_string() == *seen,
         _ => previous.is_none() && old.is_none(),
     };
-    let candidate_equal = <&str>::exec_eq(candidate, reported.as_str());
+    let candidate_equal = candidate.to_string() == reported;
     let reply = Reply { previous: old, candidate: reported, git_facts: facts, error };
     let result = bind_coverage_reply(previous, candidate, reply);
     match result {
@@ -39,7 +38,7 @@ fn check_coverage_reply(previous: Option<&str>, candidate: &str, old: Option<Str
         },
         Err(reason) => {
             expect(!candidate_equal || !previous_equal);
-            expect(<&str>::exec_eq(reason, "E_GIT_FACTS: source coverage endpoint identity mismatch"));
+            expect(reason.to_string() == "E_GIT_FACTS: source coverage endpoint identity mismatch".to_string());
         },
     }
 }
