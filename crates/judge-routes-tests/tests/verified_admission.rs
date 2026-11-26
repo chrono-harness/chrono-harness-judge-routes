@@ -16,6 +16,53 @@ mod release_observation;
 
 verus! {
 
+#[cfg(verus_keep_ghost)]
+fn documented_commands_and_arity(name: &str, extra: bool) {
+    use policy::cli::{command, Query, Command};
+    let result = command(name, extra);
+    if name@ == "--version"@ {
+        assert((result is Version) == !extra);
+        assert((result is Judge) == extra);
+    } else if name@ == "evaluate-routes-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::Evaluate) });
+    } else if name@ == "global-selection"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::GlobalSelection) });
+    } else if name@ == "collected-selection-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::CollectedSelection) });
+    } else if name@ == "check-plan-receipts-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::PlanReceipts) });
+    } else if name@ == "check-operation-receipt-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::OperationReceipt) });
+    } else if name@ == "plan-context-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::PlanContext) });
+    } else if name@ == "collection-plan-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::CollectionPlan) });
+    } else if name@ == "full-operations-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::FullOperations) });
+    } else if name@ == "source-plan-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::SourcePlan) });
+    } else if name@ == "check-unit-assignments-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::UnitAssignments) });
+    } else if name@ == "unit-declarations-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::UnitDeclarations) });
+    } else if name@ == "retained-tool-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::RetainedTool) });
+    } else if name@ == "check-plan-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::CheckPlan) });
+    } else if name@ == "dispatch-plan-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::DispatchPlan) });
+    } else if name@ == "check-scoped-plan-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::ScopedPlan) });
+    } else if name@ == "scoped-operations-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::ScopedOperations) });
+    } else if name@ == "prepare-scoped-plan-v1"@ {
+        assert(if extra { result is Usage } else { result matches Command::Query(Query::PrepareScopedPlan) });
+    } else {
+        assert(result is Judge);
+    }
+}
+
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn release_accepts_the_expected_observations_only() {
     let accepted = release_observation::accepts(2, 4, Some(1), true);

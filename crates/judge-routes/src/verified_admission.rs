@@ -13,6 +13,10 @@ pub use crate::units::{PlanAssignment, assign_plan, shared_operation_matches, va
 #[cfg(verus_keep_ghost)]
 pub use units::{PlanAssignment, assign_plan, shared_operation_matches, valid_shared_row};
 
+#[cfg(verus_keep_ghost)]
+#[path = "main.rs"]
+pub mod cli;
+
 verus! {
 
 /// Business outcome of a joined runner subprocess and its completed request writer.
