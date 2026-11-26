@@ -524,7 +524,16 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
     let mut tampered = receipt.clone();
     tampered.process.stdout_bytes.push(1);
     assert!(compare(&plan, op, Some(&tampered)).is_err());
-    for mode in 0..8 {
+    let mut equivalent = receipt.clone();
+    equivalent.process.cwd.push(".");
+    equivalent.process.executable.push(".");
+    seal(&mut equivalent);
+    compare(&plan, op, Some(&equivalent)).unwrap();
+    let mut wrong_method = receipt.clone();
+    wrong_method.method = "another method".into();
+    seal(&mut wrong_method);
+    assert!(compare(&plan, op, Some(&wrong_method)).is_err());
+    for mode in 0..10 {
         let mut process = receipt.process.clone();
         match mode {
             0 => process.argv.push("different".into()),
@@ -542,6 +551,8 @@ fn observed_literal_argv_environment_bytes_receipt_and_wrong_run() {
                 process.stdout = String::from_utf8(process.stdout_bytes.clone()).unwrap();
                 process.stdout_sha256 = sha256(&process.stdout_bytes);
             }
+            7 => process.environment_digest = "another digest".into(),
+            8 => process.executable = "/other/executable".into(),
             _ => {
                 process.stderr_bytes = vec![b'x'; op.output_limit_bytes + 1];
                 process.stderr = String::from_utf8(process.stderr_bytes.clone()).unwrap();

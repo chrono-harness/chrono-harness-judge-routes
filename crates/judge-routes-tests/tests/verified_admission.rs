@@ -145,6 +145,40 @@ fn removal_requires_downstream_or_a_replacement_and_propagates_the_original_erro
     expect(matches!(answer, Err(9)));
 }
 
+// Independent of the wire decoder and the implementation's comparison order.
+fn receipt_contract(method: &String, recorded: &String, other: &String, error: &String)
+    requires method@ != other@, recorded@ != other@,
+{
+    let correct = || -> (d: Result<String,String>) ensures d == Ok::<String,String>(*recorded) { Ok(recorded.clone()) };
+    let failed = || -> (d: Result<String,String>) ensures d == Err::<String,String>(*error) { Err(error.clone()) };
+    expect(matches!(policy::receipt_seal_matches(method, Ok(method.clone()), recorded, correct), Ok(true)));
+    expect(matches!(policy::receipt_seal_matches(method, Ok(other.clone()), recorded, failed), Ok(false)));
+    expect(matches!(policy::receipt_seal_matches(method, Ok(method.clone()), other, correct), Ok(false)));
+    let first = policy::receipt_seal_matches(method, Err(other.clone()), recorded, failed);
+    proof { assert(first == Err::<bool,String>(*other)); }
+    let second = policy::receipt_seal_matches(method, Ok(method.clone()), recorded, failed);
+    proof { assert(second == Err::<bool,String>(*error)); }
+}
+
+fn context_contract(cwd: bool, executable: bool, seen: &String, wanted: &String,
+    same_environment: bool, environment: &String, calculated: &String, stdin: &String, empty: &String, error: &String)
+{
+    let tool = policy::receipt_tool_matches(cwd && executable, seen, wanted);
+    proof { assert(tool == (cwd && executable && seen@ == wanted@)); }
+    let hash = || -> (r: Result<String,String>) ensures r == Ok::<String,String>(*calculated) { Ok(calculated.clone()) };
+    let input = || -> (s: String) ensures s@ == empty@ { empty.clone() };
+    let checked = policy::receipt_input_matches(same_environment, environment, hash, stdin, input);
+    proof { assert(checked == Ok::<bool,String>(same_environment && environment@ == calculated@ && stdin@ == empty@)); }
+    let failure = || -> (r: Result<String,String>) ensures r == Err::<String,String>(*error) { Err(error.clone()) };
+    let checked = policy::receipt_input_matches(same_environment, environment, failure, stdin, input);
+    proof { assert(checked == (if same_environment { Err::<bool,String>(*error) } else { Ok::<bool,String>(false) })); }
+}
+
+fn compiler_dispatch(contract: bool, dependency: bool, artifact: bool) {
+    let selected = policy::compiler_check_required(contract, dependency, artifact);
+    proof { assert(!selected == (!contract && !dependency && !artifact)); }
+}
+
 fn check_target_identity(plan: String, operation: String, other: String)
     requires plan@ != other@, operation@ != other@,
 {

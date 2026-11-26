@@ -160,6 +160,61 @@ pub fn receipt_target_matches(plan: &String, expected_plan: &String, operation: 
     String::eq(plan, expected_plan) && String::eq(operation, expected_operation)
 }
 
+/// Only compute the seal of the whole receipt when the declared method matches.
+pub fn receipt_seal_matches<F>(method: &String, calculated: Result<String, String>, receipt: &String, seal: F)
+    -> (result: Result<bool, String>)
+where
+    F: FnOnce() -> Result<String, String>,
+    requires seal.requires(()),
+    ensures match calculated {
+        Err(error) => result == Err::<bool, String>(error),
+        Ok(value) => if method@ != value@ { result == Ok::<bool, String>(false) } else {
+            exists|d: Result<String, String>| #[trigger] seal.ensures((), d) && match d {
+                Err(error) => result == Err::<bool, String>(error),
+                Ok(digest) => result == Ok::<bool, String>(receipt@ == digest@),
+            }
+        },
+    },
+{
+    let value = calculated?;
+    if !String::eq(method, &value) { return Ok(false); }
+    let digest = seal()?;
+    Ok(String::eq(receipt, &digest))
+}
+
+/// The wire adapter uses Rust path equality for the working directory and executable.
+pub fn receipt_tool_matches(same_paths: bool, observed: &String, expected: &String) -> (matches: bool)
+    ensures matches == (same_paths && observed@ == expected@),
+{
+    same_paths && String::eq(observed, expected)
+}
+
+/// Map equality precedes its canonical digest; stdin is inspected last.
+pub fn receipt_input_matches<H, I>(same_environment: bool, recorded: &String, hash: H, stdin: &String, empty: I)
+    -> (result: Result<bool, String>)
+where
+    H: FnOnce() -> Result<String, String>, I: FnOnce() -> String,
+    requires hash.requires(()), empty.requires(()),
+    ensures if !same_environment { result == Ok::<bool, String>(false) } else {
+        exists|d: Result<String, String>| #[trigger] hash.ensures((), d) && match d {
+            Err(error) => result == Err::<bool, String>(error),
+            Ok(value) => if recorded@ != value@ { result == Ok::<bool, String>(false) } else {
+                exists|s: String| #[trigger] empty.ensures((), s) && result == Ok::<bool, String>(stdin@ == s@)
+            }
+        }
+    },
+{
+    if !same_environment { return Ok(false); }
+    let digest = hash()?;
+    Ok(String::eq(recorded, &digest) && String::eq(stdin, &empty()))
+}
+
+pub fn compiler_check_required(contract: bool, dependency: bool, artifact: bool) -> (required: bool)
+    ensures required == (contract || dependency || artifact),
+{
+    contract || dependency || artifact
+}
+
 pub fn output_sizes_fit(stdout: usize, stderr: usize, limit: usize) -> (fit: bool)
     ensures fit == (stdout <= limit && stderr <= limit),
 {
