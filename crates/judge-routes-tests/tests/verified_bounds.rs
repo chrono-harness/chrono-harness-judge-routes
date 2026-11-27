@@ -33,6 +33,26 @@ fn expect(condition: bool)
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn both_streams_fit_the_declared_limit_and_fill_the_frame() {
+    expect(policy::valid_stream_lengths(3, 3, 6, 3));
+    expect(policy::valid_stream_lengths(0, 0, 0, 0));
+    expect(!policy::valid_stream_lengths(4, 2, 6, 3));
+    expect(!policy::valid_stream_lengths(2, 4, 6, 3));
+    expect(!policy::valid_stream_lengths(1, 1, 3, 3));
+    expect(!policy::valid_stream_lengths(usize::MAX, 1, 0, usize::MAX));
+    expect(!policy::valid_stream_lengths(1, usize::MAX, 0, usize::MAX));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn only_empty_or_single_lf_uses_the_original_exit_status() {
+    expect(policy::use_exit_status(&[]));
+    expect(policy::use_exit_status(&[10]));
+    expect(!policy::use_exit_status(&[10, 10]));
+    expect(!policy::use_exit_status(&[13, 10]));
+    expect(!policy::use_exit_status(&[255]));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn limits_of_executable_operations() {
     expect(!policy::valid_execution_bounds(0, 1));
     expect(!policy::valid_execution_bounds(1, 0));
@@ -121,5 +141,55 @@ fn exact_plan_bounds_survive_jcs_and_retained_plan_readers() {
         let legacy: Execution = serde_json::from_value(old).unwrap();
         assert_eq!(legacy.validate().is_ok(), n < 1_u64 << 53);
         assert_eq!(legacy.with_scheduling(None).is_ok(), n < 1_u64 << 53);
+    }
+}
+
+#[cfg(not(verus_keep_ghost))]
+use chrono_judge_routes::protocol;
+#[cfg(not(verus_keep_ghost))]
+#[path = "../../judge-routes/src/impact.rs"]
+mod impact;
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn filemap_impact_keeps_exit_code_and_decodes_only_the_success_stream() {
+    let input = serde_json::json!({});
+    let protocol = serde_json::json!({"timeout_seconds": 13, "stdout_limit_bytes": 4096});
+    let env = std::collections::BTreeMap::new();
+    let ok = br#"{"schema":"chrono-filemap-impact/v6","delta":[],"reached":[],"tests":[],"retired_tests":[]}"#;
+    let reply = impact::decode(&input, &protocol, &env, |_, _| {
+        Ok((0, ok.to_vec(), vec![255]))
+    })
+    .unwrap();
+    assert_eq!(reply.schema, "chrono-filemap-impact/v6");
+    assert!(
+        reply.delta.is_empty()
+            && reply.reached.is_empty()
+            && reply.tests.is_empty()
+            && reply.retired_tests.is_empty()
+    );
+    for (bytes, expected) in [
+        (
+            Vec::new(),
+            "E_IMPACT: FILEMAP impact-summary exited with -3",
+        ),
+        (
+            vec![b'\n'],
+            "E_IMPACT: FILEMAP impact-summary exited with -3",
+        ),
+        (b"detail\n\n".to_vec(), "E_IMPACT: detail\n"),
+        (b"reason\r\n".to_vec(), "E_IMPACT: reason\r"),
+        (
+            vec![255],
+            "E_IMPACT: invalid utf-8 sequence of 1 bytes from index 0",
+        ),
+    ] {
+        assert_eq!(
+            impact::decode(&input, &protocol, &env, |_, _| {
+                Ok((-3, b"ignored".to_vec(), bytes))
+            })
+            .unwrap_err(),
+            expected
+        );
     }
 }
