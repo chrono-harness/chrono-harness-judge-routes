@@ -18,6 +18,17 @@ pub mod observed_timeouts;
 #[cfg(not(verus_keep_ghost))]
 pub use crate::evidence as observed_timeouts;
 
+#[cfg(verus_keep_ghost)]
+#[path = "commands.rs"]
+mod commands;
+#[cfg(verus_keep_ghost)]
+#[path = "impact.rs"]
+mod impact;
+#[cfg(verus_keep_ghost)]
+pub use self::{commands::valid_stream_lengths, impact::use_exit_status};
+#[cfg(not(verus_keep_ghost))]
+pub use crate::{commands::valid_stream_lengths, impact::use_exit_status};
+
 verus! {
 
 pub fn valid_execution_bounds(seconds: u64, bytes: usize) -> (valid: bool)
