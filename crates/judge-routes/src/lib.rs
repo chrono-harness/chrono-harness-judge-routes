@@ -50,9 +50,34 @@ pub fn sha256(bytes: &[u8]) -> String {
     }
     encoded
 }
+/// Semantic JSON identities use RFC 8785 binary64 numbers. Execution bounds
+/// provide their exact typed wire representation before this shared hash.
 #[cfg(not(verus_keep_ghost))]
-pub fn digest<T: serde::Serialize>(v: &T) -> Result<String, String> {
-    Ok(sha256(&serde_jcs::to_vec(v).map_err(|e| e.to_string())?))
+pub fn digest<T: serde::Serialize>(value: &T) -> Result<String, String> {
+    let value = serde_json::to_value(value).map_err(|e| e.to_string())?;
+    digest_value(value)
+}
+
+#[cfg(not(verus_keep_ghost))]
+fn digest_value(mut value: Value) -> Result<String, String> {
+    fn binary64(value: &mut Value) {
+        match value {
+            Value::Array(values) => values.iter_mut().for_each(binary64),
+            Value::Object(fields) => fields.values_mut().for_each(binary64),
+            Value::Number(n)
+                if n.as_u64().is_some_and(|n| n > serde_jcs::MAX_SAFE_INTEGER)
+                    || n.as_i64()
+                        .is_some_and(|n| n < -(serde_jcs::MAX_SAFE_INTEGER as i64)) =>
+            {
+                *value = Value::from(n.as_f64().expect("finite JSON number"));
+            }
+            _ => {}
+        }
+    }
+    binary64(&mut value);
+    Ok(sha256(
+        &serde_jcs::to_vec(&value).map_err(|e| e.to_string())?,
+    ))
 }
 
 #[cfg(not(verus_keep_ghost))]
@@ -93,6 +118,7 @@ pub struct Method {
 pub struct Operation {
     pub method: Method,
     pub predecessors: BTreeSet<String>,
+    #[serde(with = "crate::declarations::timeout_wire")]
     pub timeout_seconds: u64,
     pub output_limit_bytes: usize,
 }
@@ -117,10 +143,30 @@ impl Execution {
     fn digest(&self) -> Result<String, String> {
         let mut value = serde_json::to_value(self).map_err(|e| e.to_string())?;
         value.as_object_mut().unwrap().remove("identity");
-        digest(&value)
+        match self.schema.as_str() {
+            "chrono-execution-plan/v2" => {}
+            "chrono-execution-plan/v1" => {
+                if self
+                    .operations
+                    .iter()
+                    .any(|op| op.timeout_seconds > serde_jcs::MAX_SAFE_INTEGER)
+                    || self.selected.values().any(|plan| {
+                        plan.timeout_seconds > serde_jcs::MAX_SAFE_INTEGER
+                            || plan
+                                .operation_bounds
+                                .values()
+                                .any(|bounds| bounds.timeout_seconds > serde_jcs::MAX_SAFE_INTEGER)
+                    })
+                {
+                    return Err("E_PLAN_IDENTITY: regenerate legacy plan from its exact timeout declarations".into());
+                }
+            }
+            _ => return Err("E_PLAN_IDENTITY: unknown plan schema".into()),
+        };
+        digest_value(value)
     }
     fn validate_graph(&self) -> Result<(), String> {
-        if self.schema != "chrono-execution-plan/v1" || self.identity != self.digest()? {
+        if self.identity != self.digest()? {
             return Err("E_PLAN_IDENTITY".into());
         }
         let mut preceding = BTreeSet::new();
@@ -147,6 +193,8 @@ impl Execution {
         Ok(())
     }
     pub fn with_scheduling(mut self, policy: Option<Scheduling>) -> Result<Self, String> {
+        self.validate()?;
+        self.schema = "chrono-execution-plan/v2".into();
         self.scheduling = policy;
         self.identity = self.digest()?;
         self.validate()?;
@@ -378,7 +426,7 @@ fn prepare_inner(
         tools.insert(id.clone(), tool);
     }
     let mut plan = Execution {
-        schema: "chrono-execution-plan/v1".into(),
+        schema: "chrono-execution-plan/v2".into(),
         identity: String::new(),
         binding,
         root,
@@ -410,7 +458,7 @@ pub fn prepare_collection(
         op.method.argv = expand(&op.method.argv, &binding)?;
     }
     let mut plan = Execution {
-        schema: "chrono-execution-plan/v1".into(),
+        schema: "chrono-execution-plan/v2".into(),
         identity: String::new(),
         binding,
         root: root.into(),
@@ -572,6 +620,7 @@ pub struct Receipt {
     pub plan: String,
     pub operation: String,
     pub method: String,
+    #[serde(serialize_with = "crate::declarations::timeout_wire::observation")]
     pub process: ProcessResult,
     pub compiler_dependency: Option<Result<Vec<u8>, String>>,
     pub compiler_artifact: Option<Result<CompiledArtifact, String>>,
@@ -583,7 +632,7 @@ impl Receipt {
     fn identity(&self) -> Result<String, String> {
         let mut v = serde_json::to_value(self).map_err(|e| e.to_string())?;
         v.as_object_mut().unwrap().remove("digest");
-        digest(&v)
+        digest_value(v)
     }
 }
 /// Compare actual producer observations, never populate missing observations from a plan.

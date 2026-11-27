@@ -4,6 +4,20 @@ use verus_builtin_macros::verus;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
+#[cfg(verus_keep_ghost)]
+#[path = "declarations.rs"]
+pub mod timeout_bounds;
+#[cfg(not(verus_keep_ghost))]
+pub mod timeout_bounds {
+    pub use crate::declarations::decimal_timeout;
+}
+
+#[cfg(verus_keep_ghost)]
+#[path = "evidence.rs"]
+pub mod observed_timeouts;
+#[cfg(not(verus_keep_ghost))]
+pub use crate::evidence as observed_timeouts;
+
 verus! {
 
 pub fn valid_execution_bounds(seconds: u64, bytes: usize) -> (valid: bool)
