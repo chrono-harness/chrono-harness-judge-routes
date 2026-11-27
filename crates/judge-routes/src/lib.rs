@@ -208,9 +208,9 @@ pub fn binding(req: &Request, inputs: &Value) -> Value {
 /// Keep operation originals beside the report selected by the existing owner.
 #[cfg(not(verus_keep_ghost))]
 pub fn operation_state_path(report_path: &str, run: &Value) -> String {
-    format!(
-        "{report_path}.operations-{}",
-        digest(run).expect("JSON run identity serializes")
+    plan_query::operation_directory(
+        report_path,
+        &digest(run).expect("JSON run identity serializes"),
     )
 }
 #[cfg(not(verus_keep_ghost))]
