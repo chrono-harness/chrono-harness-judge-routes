@@ -1,9 +1,46 @@
 //! Read and replay route evidence without executing operations or acquiring tools.
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+use vstd::string::StringExecFns;
+
+verus! {
+/// Only the planner can supply the derived operation directory. Preserve the original run.
+pub(crate) fn scoped_run<T>(supplied: bool, run: Option<&T>) -> (result: Result<&T, &'static str>)
+    ensures
+        supplied ==> (result matches Err(e) && e@ == "E_PLAN_BINDING: operation_state is derived from the report"@),
+        !supplied ==> match run {
+            Some(value) => result == Ok::<&T, &'static str>(value),
+            None => result matches Err(e) && e@ == "E_PLAN_BINDING: missing scoped run identity"@,
+        },
+{
+    if supplied { return Err("E_PLAN_BINDING: operation_state is derived from the report"); }
+    match run { Some(value) => Ok(value), None => Err("E_PLAN_BINDING: missing scoped run identity") }
+}
+
+/// Use the original report and the canonical digest of its run for the operation directory.
+pub(crate) fn operation_directory(report: &str, run_digest: &str) -> (directory: String)
+    ensures directory@ == report@ + ".operations-"@ + run_digest@,
+{
+    let mut directory = report.to_string();
+    directory.append(".operations-");
+    directory.append(run_digest);
+    directory
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::declarations as execution;
+#[cfg(not(verus_keep_ghost))]
 use crate::protocol::Request;
+#[cfg(not(verus_keep_ghost))]
 use crate::{Execution, Method, Receipt, compare_validated, unique_actions};
+#[cfg(not(verus_keep_ghost))]
 use serde::Deserialize;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     io::Read,
@@ -11,6 +48,7 @@ use std::{
 };
 
 /// Compare the supplied original receipts against a single validated plan, in plan order.
+#[cfg(not(verus_keep_ghost))]
 pub fn check_plan_receipts(input: impl std::io::Read) -> Result<Value, String> {
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
@@ -33,6 +71,7 @@ pub fn check_plan_receipts(input: impl std::io::Read) -> Result<Value, String> {
 }
 
 /// Check the receipt for one operation taken from the caller's already admitted plan.
+#[cfg(not(verus_keep_ghost))]
 pub fn check_operation_receipt(input: impl Read) -> Result<Value, String> {
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
@@ -57,6 +96,7 @@ pub fn check_operation_receipt(input: impl Read) -> Result<Value, String> {
     Ok(json!({"plan":q.plan, "operation":q.operation.method.operation, "error":problem}))
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Context {
@@ -66,6 +106,7 @@ struct Context {
 }
 
 /// Compute the request binding and expand only the original declaration templates.
+#[cfg(not(verus_keep_ghost))]
 pub fn plan_context(input: impl Read) -> Result<Value, String> {
     let query: Context = serde_json::from_reader(input).map_err(|e| e.to_string())?;
     let binding = crate::binding(&query.request, &query.effective_inputs);
@@ -77,6 +118,7 @@ pub fn plan_context(input: impl Read) -> Result<Value, String> {
     Ok(json!({"request_id":query.request.request_id,"binding":binding,"expanded":expanded}))
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Collection {
@@ -89,12 +131,14 @@ struct Collection {
     environment: BTreeMap<String, String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 struct Declarations {
     plans: BTreeMap<String, execution::Plan>,
     methods: Result<BTreeMap<String, Vec<Method>>, String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn declarations(
     filemap: Value,
     projects: Value,
@@ -108,16 +152,19 @@ fn declarations(
         .map_err(|e| format!("invalid registration execution declarations: {e}"))
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn installed(operation: &str, input: &Value) -> Result<Vec<u8>, String> {
     let root = std::env::current_dir().map_err(|e| e.to_string())?;
     crate::registration::query(&root, operation, input)
 }
 
 /// Reconstruct the global declaration plan at its original coordinates.
+#[cfg(not(verus_keep_ghost))]
 pub fn collection_plan(input: impl Read) -> Result<Value, String> {
     collection_plan_with(input, installed)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn collection_plan_with(
     input: impl Read,
     read: impl FnOnce(&str, &Value) -> Result<Vec<u8>, String>,
@@ -137,6 +184,7 @@ pub fn collection_plan_with(
 }
 
 /// Registration readiness already holds the interpreted plans and unit declarations.
+#[cfg(not(verus_keep_ghost))]
 pub fn check_unit_assignments(input: impl Read) -> Result<Value, String> {
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
@@ -150,10 +198,12 @@ pub fn check_unit_assignments(input: impl Read) -> Result<Value, String> {
 }
 
 /// Plan the full CI obligations from the interpreted endpoint, without running tools.
+#[cfg(not(verus_keep_ghost))]
 pub fn full_operations(input: impl Read) -> Result<Value, String> {
     full_operations_with(input, installed)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn full_operations_with(
     input: impl Read,
     read: impl FnOnce(&str, &Value) -> Result<Vec<u8>, String>,
@@ -192,10 +242,12 @@ pub fn full_operations_with(
 }
 
 /// Rebuild the global operation graph and a unit's expanded operations at its original coordinates.
+#[cfg(not(verus_keep_ghost))]
 pub fn unit_declarations(input: impl Read) -> Result<Value, String> {
     unit_declarations_with(input, installed)
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn unit_declarations_with(
     input: impl Read,
     read: impl FnOnce(&str, &Value) -> Result<Vec<u8>, String>,
@@ -233,6 +285,7 @@ pub fn unit_declarations_with(
 }
 
 /// Check a retained tool against its original declaration without observing a live tool.
+#[cfg(not(verus_keep_ghost))]
 pub fn retained_tool(input: impl Read) -> Result<Value, String> {
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
@@ -256,6 +309,7 @@ pub fn retained_tool(input: impl Read) -> Result<Value, String> {
     Ok(json!({"sha256":q.tool.sha256}))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn check_plan(input: impl Read) -> Result<Value, String> {
     let plan: Execution = serde_json::from_reader(input).map_err(|e| e.to_string())?;
     plan.validate()?;
@@ -263,6 +317,7 @@ pub fn check_plan(input: impl Read) -> Result<Value, String> {
 }
 
 /// Admit a plan and resolve the order in which its executor considers ready operations.
+#[cfg(not(verus_keep_ghost))]
 pub fn dispatch_plan(input: impl Read) -> Result<Value, String> {
     let plan: Execution = serde_json::from_reader(input).map_err(|e| e.to_string())?;
     plan.validate_graph()?;
@@ -272,24 +327,23 @@ pub fn dispatch_plan(input: impl Read) -> Result<Value, String> {
 
 /// Expand the caller's scoped request fields using the same original-directory
 /// convention as the full planner.
+#[cfg(not(verus_keep_ghost))]
 fn scoped_binding(mut binding: Value, report_path: &str) -> Result<Value, String> {
     crate::declarations::relative_path(report_path)?;
     let fields = binding
         .as_object_mut()
         .ok_or("E_PLAN_BINDING: expected scoped request fields")?;
-    if fields.contains_key("operation_state") {
-        return Err("E_PLAN_BINDING: operation_state is derived from the report".into());
-    }
-    let run = fields
-        .get("run")
-        .filter(|run| run.is_string())
-        .ok_or("E_PLAN_BINDING: missing scoped run identity")?;
+    let run = scoped_run(
+        fields.contains_key("operation_state"),
+        fields.get("run").filter(|run| run.is_string()),
+    )?;
     let directory = crate::operation_state_path(report_path, run);
     fields.insert("operation_state".into(), Value::String(directory));
     Ok(binding)
 }
 
 /// Replay the original report selection without acquiring tools or running operations.
+#[cfg(not(verus_keep_ghost))]
 pub fn check_scoped_plan(input: impl Read) -> Result<Value, String> {
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
@@ -310,6 +364,7 @@ pub fn check_scoped_plan(input: impl Read) -> Result<Value, String> {
 
 /// Scoped CI can order the same declarations for scheduling and replay them
 /// for a particular request without probing an executable during collection.
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct ScopedGraph {
@@ -319,6 +374,7 @@ struct ScopedGraph {
     execute: BTreeMap<String, String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn scoped_operations(input: impl Read) -> Result<Value, String> {
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]
@@ -342,6 +398,7 @@ pub fn scoped_operations(input: impl Read) -> Result<Value, String> {
     Ok(json!({"selected": selected, "operations": operations}))
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn prepare_scoped_plan(root: &std::path::Path, input: impl Read) -> Result<Value, String> {
     #[derive(Deserialize)]
     #[serde(deny_unknown_fields)]

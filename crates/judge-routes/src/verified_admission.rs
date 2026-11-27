@@ -22,6 +22,10 @@ pub use units::{PlanAssignment, assign_plan, shared_operation_matches, valid_sha
 pub mod cli;
 
 #[cfg(verus_keep_ghost)]
+#[path = "plan_query.rs"]
+pub mod plan_query;
+
+#[cfg(verus_keep_ghost)]
 #[path = "source_plan.rs"]
 pub mod source_plan;
 

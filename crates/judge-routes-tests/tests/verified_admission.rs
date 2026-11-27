@@ -24,6 +24,22 @@ mod roadmap;
 
 verus! {
 
+#[cfg(verus_keep_ghost)]
+fn scoped_run_requires_an_original_run_and_a_derived_directory(
+    report: &str, digest: &str, identity: &u64,
+) {
+    let original = policy::plan_query::scoped_run(false, Some(identity));
+    assert(original == Ok::<&u64, &'static str>(identity));
+    let absent = policy::plan_query::scoped_run::<u64>(false, None);
+    assert(absent matches Err(e) && e@ == "E_PLAN_BINDING: missing scoped run identity"@);
+    let supplied = policy::plan_query::scoped_run::<u64>(true, None);
+    let both = policy::plan_query::scoped_run(true, Some(identity));
+    assert(supplied matches Err(e) && e@ == "E_PLAN_BINDING: operation_state is derived from the report"@);
+    assert(both matches Err(e) && e@ == "E_PLAN_BINDING: operation_state is derived from the report"@);
+    let state = policy::plan_query::operation_directory(report, digest);
+    assert(state@ == report@ + ".operations-"@ + digest@);
+}
+
 fn check_coverage_reply(previous: Option<&str>, candidate: &str, old: Option<String>,
     reported: String, facts: u8, error: Option<String>) {
     let previous_equal = match (previous, &old) {
