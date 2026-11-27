@@ -1,11 +1,15 @@
 //! JSON records returned by the installed process and compiler owners.
+#[cfg(not(verus_keep_ghost))]
 use serde::{Deserialize, Serialize};
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},
 };
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ProcessResult {
     pub argv: Vec<String>,
@@ -47,6 +51,7 @@ pub struct ProcessResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub child_pid: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::declarations::timeout_wire::optional::deserialize")]
     pub timeout_seconds: Option<u64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub output_limit_bytes: Option<usize>,
@@ -54,12 +59,14 @@ pub struct ProcessResult {
     pub launch_original: Option<Value>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum ErrorSchema {
     #[serde(rename = "chrono-error/v1")]
     V1,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ErrorRecord {
@@ -67,6 +74,7 @@ pub struct ErrorRecord {
     pub error: ErrorNode,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct ErrorNode {
@@ -84,6 +92,7 @@ pub struct ErrorNode {
     pub related: Vec<RelatedError>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct RelatedError {
@@ -91,6 +100,7 @@ pub struct RelatedError {
     pub error: ErrorNode,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct OutputContract {
@@ -98,6 +108,7 @@ pub struct OutputContract {
     pub commit: String,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CompiledArtifact {
@@ -106,6 +117,7 @@ pub struct CompiledArtifact {
     pub length: u64,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Tool {
@@ -113,9 +125,11 @@ pub struct Tool {
     pub path: PathBuf,
     pub basename: String,
     pub sha256: String,
+    #[serde(serialize_with = "crate::declarations::timeout_wire::observation")]
     pub version: ProcessResult,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn tool(
     root: &Path,
     program: &str,
@@ -128,8 +142,26 @@ pub fn tool(
     let raw = crate::registration::runner(root, "observed-tool-v1", &input)?;
     serde_json::from_slice(&raw).map_err(|e| e.to_string())
 }
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn compiler(input: Value) -> Result<Value, String> {
     let root = std::env::current_dir().map_err(|e| e.to_string())?;
     let raw = crate::registration::runner(&root, "compiler-output-v1", &input)?;
     serde_json::from_slice(&raw).map_err(|e| e.to_string())
+}
+
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// An absent timeout and a safely representable timeout retain their native JSON shape.
+pub fn exact_observation_timeout(seconds: Option<u64>) -> (text: Option<u64>)
+    ensures match seconds {
+        Some(n) if n >= 9007199254740992 => text == Some(n),
+        _ => text.is_none(),
+    },
+{
+    match seconds { Some(n) if n >= 9007199254740992u64 => Some(n), _ => None }
+}
 }

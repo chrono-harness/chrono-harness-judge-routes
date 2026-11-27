@@ -752,7 +752,20 @@
           "kind": "test-execution",
           "to": "test:judge-routes-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes/src/verified_bounds.rs",
+            "operation": "verify.route-bounds"
+          },
+          {
+            "path": "crates/judge-routes-tests/tests/verified_bounds.rs",
+            "operation": "verify.route-bounds-tests"
+          }
+        ]
+      }
     },
     {
       "path": "crates/judge-routes/src/evidence.rs",
@@ -764,7 +777,20 @@
           "kind": "test-execution",
           "to": "test:judge-routes-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes/src/verified_bounds.rs",
+            "operation": "verify.route-bounds"
+          },
+          {
+            "path": "crates/judge-routes-tests/tests/verified_bounds.rs",
+            "operation": "verify.route-bounds-tests"
+          }
+        ]
+      }
     },
     {
       "path": "crates/judge-routes/src/impact.rs",
