@@ -1,13 +1,42 @@
 //! Run a public query on the host-selected registration executable.
+#[cfg(verus_keep_ghost)]
+use super::protocol::request_matches;
+#[cfg(not(verus_keep_ghost))]
+use crate::protocol::request_matches;
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// Route views bind both commits in the order used to resolve changes.
+pub fn view_identity_matches(
+    expected_id: &String, returned_id: &String, base: &String, candidate: &String,
+    returned_base: &String, returned_candidate: &String,
+) -> (matched: bool)
+    ensures matched == (expected_id@ == returned_id@ && base@ == returned_base@
+        && candidate@ == returned_candidate@),
+{
+    request_matches(Some(expected_id), Some(returned_id)) &&
+        String::eq(base, returned_base) && String::eq(candidate, returned_candidate)
+}
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::{Method, Plan, Scheduling};
+#[cfg(not(verus_keep_ghost))]
 use crate::{Tool, protocol::Request};
+#[cfg(not(verus_keep_ghost))]
 use serde::Deserialize;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
 };
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn query(root: &Path, operation: &str, query: &Value) -> Result<Vec<u8>, String> {
     crate::commands::query(
         "installed-query-v1",
@@ -16,6 +45,7 @@ pub(crate) fn query(root: &Path, operation: &str, query: &Value) -> Result<Vec<u
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn native_query(req: &Request, operation: &str, input: &Value) -> Result<Vec<u8>, String> {
     crate::commands::query(
         "installed-query-v1",
@@ -24,10 +54,12 @@ fn native_query(req: &Request, operation: &str, input: &Value) -> Result<Vec<u8>
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn runner(_root: &Path, operation: &str, input: &Value) -> Result<Vec<u8>, String> {
     crate::commands::query(operation, input)
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 pub(super) struct Endpoint {
     pub config: Value,
@@ -35,6 +67,7 @@ pub(super) struct Endpoint {
     pub projects: Value,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 pub(super) struct Views {
     pub base: Endpoint,
@@ -47,6 +80,7 @@ pub(super) struct Views {
     pub registration_view: Value,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn views(req: &Request, git: &mut Value) -> Result<Views, String> {
     #[derive(Deserialize)]
     struct Reply {
@@ -57,15 +91,21 @@ pub(super) fn views(req: &Request, git: &mut Value) -> Result<Views, String> {
     }
     let bytes = native_query(req, "route-views-v1", &json!(req))?;
     let reply: Reply = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
-    if reply.request_id != req.request_id
-        || reply.commits != [req.base.commit.as_str(), req.candidate.commit.as_str()]
-    {
+    if !view_identity_matches(
+        &req.request_id,
+        &reply.request_id,
+        &req.base.commit,
+        &req.candidate.commit,
+        &reply.commits[0],
+        &reply.commits[1],
+    ) {
         return Err("E_PROTOCOL: registration route views identity".into());
     }
     *git = reply.git_facts.unwrap_or(Value::Null);
     reply.result
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn effective_inputs(
     req: &Request,
     view: &Value,
@@ -82,13 +122,14 @@ pub(super) fn effective_inputs(
         &json!({"request":req,"view":view,"selected":selected}),
     )?;
     let reply: Reply = serde_json::from_slice(&bytes).map_err(|e| e.to_string())?;
-    if reply.request_id != req.request_id {
+    if !request_matches(Some(&req.request_id), Some(&reply.request_id)) {
         return Err("E_PROTOCOL: registration route inputs identity".into());
     }
     Ok(reply.effective_inputs)
 }
 
 /// Registration reads the fixed endpoints first. The route planner may read source continuity later.
+#[cfg(not(verus_keep_ghost))]
 pub(super) fn append_source_facts(
     registration: &mut Value,
     mut source: Value,

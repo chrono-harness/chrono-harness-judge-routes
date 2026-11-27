@@ -1,13 +1,50 @@
+#[cfg(verus_keep_ghost)]
+use super::{predecessors_ready, protocol::request_matches};
+#[cfg(not(verus_keep_ghost))]
+use crate::{protocol::request_matches, verified_admission::predecessors_ready};
+use std::collections::BTreeSet;
+#[cfg(not(verus_keep_ghost))]
+use verus_builtin_macros::verus;
+#[cfg(verus_keep_ghost)]
+use vstd::prelude::*;
+
+verus! {
+/// A registration decision belongs to the same query only when its nullable
+/// request identity and its complete set of retired tests match.
+pub fn retirement_reply_matches<K: Ord>(
+    expected: Option<&String>, returned: Option<&String>, requested: &BTreeSet<K>, decided: &BTreeSet<K>,
+) -> (accepted: bool)
+    requires vstd::laws_cmp::obeys_cmp::<K>(),
+    ensures accepted == (requested@ == decided@ && match (expected, returned) {
+        (None, None) => true,
+        (Some(a), Some(b)) => a@ == b@,
+        _ => false,
+    }),
+{
+    if !request_matches(expected, returned) || !predecessors_ready(requested, decided) || !predecessors_ready(decided, requested) {
+        return false;
+    }
+    assert(requested@ =~= decided@);
+    true
+}
+
+}
+
+#[cfg(not(verus_keep_ghost))]
 use crate::protocol::Request;
+#[cfg(not(verus_keep_ghost))]
 use serde::Deserialize;
+#[cfg(not(verus_keep_ghost))]
 use serde_json::{Value, json};
+#[cfg(not(verus_keep_ghost))]
 use std::{
-    collections::{BTreeMap, BTreeSet},
+    collections::BTreeMap,
     io::{Read, Write},
     path::Path,
 };
 
 /// The planner chooses the global obligations before applying a transport scope.
+#[cfg(not(verus_keep_ghost))]
 fn merge(
     tests: Vec<String>,
     retired: &[String],
@@ -23,6 +60,7 @@ fn merge(
     Ok(selected)
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 struct Documents {
     config: String,
@@ -32,6 +70,7 @@ struct Documents {
     retired_tests: Vec<String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
 struct Collection {
@@ -41,6 +80,7 @@ struct Collection {
     retired_tests: Vec<String>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 #[derive(Deserialize)]
 struct Decisions {
     request_id: Value,
@@ -48,6 +88,7 @@ struct Decisions {
     retirements: BTreeMap<String, Result<Option<String>, String>>,
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub(crate) fn choose(
     judge: &str,
     endpoints: Value,
@@ -65,7 +106,7 @@ pub(crate) fn choose(
         Value::String(id) => Some(id),
         _ => return Err(mismatch.into()),
     };
-    if !crate::verified_admission::retirement_reply_matches(
+    if !retirement_reply_matches(
         expected,
         returned,
         &retired.iter().collect(),
@@ -78,6 +119,7 @@ pub(crate) fn choose(
     })
 }
 
+#[cfg(not(verus_keep_ghost))]
 fn write_selection(
     endpoints: Value,
     expected: Option<&String>,
@@ -91,6 +133,7 @@ fn write_selection(
     output.flush().map_err(|e| e.to_string())
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn select_from_registries_with(
     input: impl Read,
     output: impl Write,
@@ -107,6 +150,7 @@ pub fn select_from_registries_with(
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn select_collected_with(
     root: &Path,
     input: impl Read,
@@ -132,6 +176,7 @@ pub fn select_collected_with(
     )
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn select_from_registries(input: impl Read, output: impl Write) -> Result<(), String> {
     let root = std::env::current_dir().map_err(|e| e.to_string())?;
     select_from_registries_with(input, output, |operation, query| {
@@ -139,6 +184,7 @@ pub fn select_from_registries(input: impl Read, output: impl Write) -> Result<()
     })
 }
 
+#[cfg(not(verus_keep_ghost))]
 pub fn select_collected(root: &Path, input: impl Read, output: impl Write) -> Result<(), String> {
     select_collected_with(root, input, output, |operation, query| {
         crate::registration::query(root, operation, query)

@@ -876,7 +876,20 @@
           "kind": "test-execution",
           "to": "test:judge-routes-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes/src/verified_admission.rs",
+            "operation": "verify.route-admission"
+          },
+          {
+            "path": "crates/judge-routes-tests/tests/verified_admission.rs",
+            "operation": "verify.route-admission-tests"
+          }
+        ]
+      }
     },
     {
       "path": "crates/judge-routes/src/registration.rs",
@@ -888,7 +901,20 @@
           "kind": "test-execution",
           "to": "test:judge-routes-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes/src/verified_admission.rs",
+            "operation": "verify.route-admission"
+          },
+          {
+            "path": "crates/judge-routes-tests/tests/verified_admission.rs",
+            "operation": "verify.route-admission-tests"
+          }
+        ]
+      }
     },
     {
       "path": "crates/judge-routes/src/selection.rs",
@@ -900,7 +926,20 @@
           "kind": "test-execution",
           "to": "test:judge-routes-tests"
         }
-      ]
+      ],
+      "verification": {
+        "role": "program",
+        "roots": [
+          {
+            "path": "crates/judge-routes/src/verified_admission.rs",
+            "operation": "verify.route-admission"
+          },
+          {
+            "path": "crates/judge-routes-tests/tests/verified_admission.rs",
+            "operation": "verify.route-admission-tests"
+          }
+        ]
+      }
     },
     {
       "path": "crates/judge-routes/src/source_plan.rs",

@@ -244,6 +244,22 @@ fn registration_decisions_cover_the_exact_retirement_query() {
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn registration_views_bind_each_endpoint_in_order() {
+    let id = "id".to_string();
+    let old = "base".to_string();
+    let new = "candidate".to_string();
+    proof {
+        reveal_strlit("id"); reveal_strlit("base"); reveal_strlit("candidate");
+        assert("id"@.len() != "base"@.len());
+        assert("base"@.len() != "candidate"@.len());
+    }
+    expect(policy::view_identity_matches(&id, &id, &old, &new, &old, &new));
+    expect(!policy::view_identity_matches(&id, &old, &old, &new, &old, &new));
+    expect(!policy::view_identity_matches(&id, &id, &old, &new, &new, &old));
+    expect(!policy::view_identity_matches(&id, &id, &old, &new, &old, &old));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn removal_requires_downstream_or_a_replacement_and_propagates_the_original_error() {
     let mut selected = BTreeSet::<u64>::new();
     let absent: Result<Option<u64>, u64> = Ok(None);
