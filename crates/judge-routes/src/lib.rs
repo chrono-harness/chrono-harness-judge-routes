@@ -244,7 +244,7 @@ pub fn order(
     methods: &BTreeMap<String, Vec<Method>>,
     execute: &BTreeMap<String, String>,
 ) -> Result<(BTreeMap<String, Plan>, Vec<Operation>), String> {
-    let mut operations: BTreeMap<String, Operation> = BTreeMap::new();
+    let mut operations = verified_admission::OperationGraph::new();
     let mut chosen = BTreeMap::new();
     for test in selected {
         let plan = plans
@@ -267,36 +267,34 @@ pub fn order(
             if defs.len() != 1 || id == "validate.delta" {
                 return Err(format!("E_ROUTE_AMBIGUOUS: {id}"));
             }
-            let op = operations
-                .entry(id.to_owned())
-                .or_insert_with(|| Operation {
-                    method: defs[0].clone(),
-                    predecessors: BTreeSet::new(),
-                    timeout_seconds,
-                    output_limit_bytes,
+            let ((_, shared_timeout, shared_output_limit), predecessors) =
+                operations.entry(id.to_owned()).or_insert_with(|| {
+                    (
+                        (defs[0].clone(), timeout_seconds, output_limit_bytes),
+                        BTreeSet::new(),
+                    )
                 });
-            if op.timeout_seconds != timeout_seconds || op.output_limit_bytes != output_limit_bytes
-            {
+            if *shared_timeout != timeout_seconds || *shared_output_limit != output_limit_bytes {
                 return Err(format!("E_PLAN_BOUNDS: inconsistent shared operation {id}"));
             }
             if let Some(p) = previous {
-                op.predecessors.insert(p);
+                predecessors.insert(p);
             }
             previous = Some(id.to_owned());
         }
         chosen.insert(test.clone(), plan.clone());
     }
-    let mut ordered = vec![];
-    let mut done = BTreeSet::new();
-    while !operations.is_empty() {
-        let id = operations
-            .iter()
-            .find(|(_, op)| verified_admission::predecessors_ready(&op.predecessors, &done))
-            .map(|(id, _)| id.clone())
-            .ok_or("E_PLAN_CYCLE: inconsistent operation ordering")?;
-        ordered.push(operations.remove(&id).unwrap());
-        done.insert(id);
-    }
+    let ordered = verified_admission::order_operations(operations)?
+        .into_iter()
+        .map(
+            |(_, ((method, timeout_seconds, output_limit_bytes), predecessors))| Operation {
+                method,
+                predecessors,
+                timeout_seconds,
+                output_limit_bytes,
+            },
+        )
+        .collect();
     Ok((chosen, ordered))
 }
 #[cfg(not(verus_keep_ghost))]
