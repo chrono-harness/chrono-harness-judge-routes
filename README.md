@@ -58,6 +58,19 @@ scoped CI 可向 `prepare-scoped-plan-v1` 提供原始报告的宿主相对路�
 
 Registration readiness uses `chrono-judge-routes check-unit-assignments-v1`. It reads one JSON object with `execution_units` and the already interpreted `plans` on stdin. It writes `null` on success. Invalid input or assignment exits with code 2 and the diagnostic on stderr.
 
+## 排序前的计划准入
+
+| 查询 | 现役使用方 | 生产判定 |
+| --- | --- | --- |
+| `full-operations-v1` | judge-ci 完整调度与收集 | 调度先核单元分配，再从登记端点读计划和方法，并从每个测试的绑定提取唯一 execute。 |
+| `scoped-operations-v1`、`prepare-scoped-plan-v1` | judge-ci scoped 调度、准备与收集 | 从调用方提供的图读取同一类声明。准备入口先核原运行和报告目录，再核图。 |
+| `unit-declarations-v1` | judge-projects 单元结果重建 | 单元选择必须包含于全局选择。通过后从同一登记端点先重建全局，再重建单元，最后展开单元参数。 |
+| `collection-plan-v1`、`evaluate-routes-v1` | 路由计划重建与实际判官入口 | 共享计划准入和排序。 |
+
+每项选择先核计划存在，再核默认限额、操作序列和覆盖限额。之后要求唯一 execute 且该操作出现在计划内，逐项核方法是否存在并唯一。存在方法声明时拒绝保留名 `validate.delta`。同名操作的限额一致时只保留一条，合并直接前驱。不同限额先于排序失败。排序继续使用 `verify.route-admission` 的既有就绪项及环证明。
+
+`declarations.rs` 的步骤解析由 `verify.route-bounds` 和 `verify.route-bounds-tests` 检查。方法、execute、共享操作归并及单元子集使用 `verify.route-admission` 和 `verify.route-admission-tests`。仓库检查核对 Verus 两组编译输入以及原生二进制的源码。证明输入是解码后的 Rust 值。外部合同包括 serde 的 JSON 类型和必填字段、登记进程返回的解释结果、Rust 标准库字符串和有序集合的比较及操作语义。参数模板、路径、工具观察、进程通信、签名计划封装与来源回执继续沿各自的登记入口验收。
+
 ## 本地检查产物
 
 从主检出运行 `mise exec -- ./check.sh`。检查持有工作树租约，结束时控制台给出原报告路径。准备输入和原报告在 `.chrono-harness/state/preparation/`，单元结果在 `.chrono-harness/state/routes/`，汇总结果在 `.chrono-harness/state/collection/`。证明编译件和依赖清单位于本次执行报告所属目录。需要留存的文件应在当次滚动前复制到持久存储。GitHub Actions 对上传的单元结果保留一天。汇总结果采用仓库的默认保留期，在本次核对的实际上传中约为 90 天。

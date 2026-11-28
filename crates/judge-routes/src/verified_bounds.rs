@@ -9,7 +9,7 @@ use vstd::prelude::*;
 pub mod timeout_bounds;
 #[cfg(not(verus_keep_ghost))]
 pub mod timeout_bounds {
-    pub use crate::declarations::decimal_timeout;
+    pub use crate::declarations::{Bounds, Plan, decimal_timeout};
 }
 
 #[cfg(verus_keep_ghost)]
@@ -31,8 +31,12 @@ pub use crate::{commands::valid_stream_lengths, impact::use_exit_status};
 
 verus! {
 
+pub open spec fn execution_bounds_valid(seconds: u64, bytes: usize) -> bool {
+    seconds > 0 && 1 <= bytes <= 67_108_864
+}
+
 pub fn valid_execution_bounds(seconds: u64, bytes: usize) -> (valid: bool)
-    ensures valid == (seconds > 0 && 1 <= bytes <= 67_108_864),
+    ensures valid == execution_bounds_valid(seconds, bytes),
 {
     seconds > 0 && bytes >= 1 && bytes <= 67_108_864
 }

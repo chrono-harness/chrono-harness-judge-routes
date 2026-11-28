@@ -168,6 +168,97 @@ fn expect(value: bool)
 { if !value { panic!(); } }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn plan_admission_requires_present_and_unique_declarations() {
+    broadcast use vstd::string::group_string_axioms;
+    let missing = policy::required_declaration::<u8, _>(None, 7);
+    expect(matches!(missing, Err(7)));
+    let found = policy::required_declaration(Some(&9u8), 7);
+    expect(matches!(found, Ok(value) if *value == 9));
+    let none: [u8; 0] = [];
+    expect(policy::unique_action(&none).is_none());
+    expect(policy::unique_action(&[7u8, 7u8]).is_none());
+    let one_action = [9u8];
+    expect(policy::unique_action(&one_action) == Some(&9u8));
+
+    let mut definitions = Vec::new();
+    let missing = policy::admit_method::<u8>("validate.delta", None);
+    expect(matches!(missing, Err(policy::MethodIssue::Missing)));
+    let empty = policy::admit_method("compile", Some(&definitions));
+    expect(matches!(empty, Err(policy::MethodIssue::Ambiguous)));
+    definitions.push(9u8);
+    proof {
+        reveal_strlit("compile");
+        reveal_strlit("validate.delta");
+    }
+    let reserved = policy::admit_method("validate.delta", Some(&definitions));
+    expect(matches!(reserved, Err(policy::MethodIssue::Ambiguous)));
+    proof {
+        assert("compile"@.len() == 7);
+        assert("validate.delta"@.len() == 14);
+        assert("compile"@ != "validate.delta"@);
+        assert(definitions@ =~= seq![9u8]);
+    }
+    let one = policy::admit_method("compile", Some(&definitions));
+    expect(matches!(one, Ok(value) if *value == 9));
+    definitions.push(9);
+    let ambiguous = policy::admit_method("compile", Some(&definitions));
+    expect(matches!(ambiguous, Err(policy::MethodIssue::Ambiguous)));
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn execute_binding_and_shared_predecessors_follow_the_plan()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    broadcast use vstd::std_specs::btree::axiom_maps_deref_key_to_value;
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit("first");
+        reveal_strlit("right");
+        reveal_strlit("shared");
+    }
+    let first = "first".to_string();
+    let right = "right".to_string();
+    let shared = "shared".to_string();
+    let mut operations = Vec::new();
+    operations.push(first.clone());
+    operations.push(shared.clone());
+    proof {
+        assert(operations@ =~= seq![first, shared]);
+        assert(operations@[1]@ == shared@);
+        assert(first@[0] == 'f' && shared@[0] == 's' && right@[0] == 'r');
+        assert(first@ != right@ && shared@ != right@);
+        assert forall|i: int| 0 <= i < operations@.len()
+            implies (#[trigger] operations@[i])@ != right@ by {
+            assert(i == 0 || i == 1);
+        }
+    }
+    expect(policy::contains_action(&operations, &shared));
+    expect(!policy::contains_action(&operations, &right));
+
+    let mut graph = policy::OperationGraph::new();
+    expect(policy::merge_operation(&mut graph, shared.clone(), (1u8, 10, 4096), Some(first.clone())));
+    expect(!policy::merge_operation(&mut graph, shared.clone(), (2u8, 11, 4096), Some(right.clone())));
+    expect(!policy::merge_operation(&mut graph, shared.clone(), (2u8, 10, 4097), Some(right.clone())));
+    expect(policy::merge_operation(&mut graph, shared.clone(), (2u8, 10, 4096), Some(right.clone())));
+    expect(policy::merge_operation(&mut graph, shared.clone(), (2u8, 10, 4096), Some(first.clone())));
+    proof {
+        assert(graph@.contains_key(shared));
+    }
+    match graph.get(&shared) {
+        Some((method, predecessors)) => {
+            expect(method.0 == 1 && method.1 == 10 && method.2 == 4096);
+            proof {
+                assert(predecessors@ =~= Set::empty().insert(first).insert(right));
+                assert(first != right);
+                vstd::set::axiom_set_insert_len(Set::empty().insert(first), right);
+            }
+            expect(predecessors.len() == 2);
+        },
+        None => panic!(),
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn dispatch_ranks_admit_distinct_claims_and_place_unranked_operations_last() {
     let mut ranks = BTreeMap::<u8, usize>::new();
     let good = [97u8, 98u8];

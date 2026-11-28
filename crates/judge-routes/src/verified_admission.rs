@@ -2,6 +2,7 @@
 use std::collections::{BTreeMap, BTreeSet};
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
+use vstd::contrib::exec_spec::ExecSpecEq;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
@@ -149,6 +150,114 @@ pub fn predecessors_ready<K: Ord>(required: &BTreeSet<K>, finished: &BTreeSet<K>
 
 /// A node carries its original operation data and the union of its declared predecessors.
 pub type OperationGraph<V> = BTreeMap<String, (V, BTreeSet<String>)>;
+
+/// Resolve a declaration without substituting for a missing route.
+pub fn required_declaration<'a, T, E: Copy>(declaration: Option<&'a T>, error: E)
+    -> (result: Result<&'a T, E>)
+    ensures result == match declaration { Some(value) => Ok(value), None => Err(error) },
+{
+    match declaration { Some(value) => Ok(value), None => Err(error) }
+}
+
+/// Only one execute binding may enter the selected-action map.
+pub fn unique_action<T>(actions: &[T]) -> (action: Option<&T>)
+    ensures action == if actions@.len() == 1 { Some(&actions[0]) } else { None },
+{
+    if actions.len() == 1 { Some(&actions[0]) } else { None }
+}
+
+/// Match the original execute binding to a member of the declared sequence.
+pub fn contains_action(operations: &[String], action: &String) -> (present: bool)
+    ensures present == (exists|i: int| 0 <= i < operations@.len()
+        && (#[trigger] operations@[i])@ == action@),
+{
+    let mut i = 0;
+    while i < operations.len()
+        invariant
+            i <= operations@.len(),
+            forall|j: int| 0 <= j < i ==> (#[trigger] operations@[j])@ != action@,
+        decreases operations@.len() - i,
+    {
+        if <String as PartialEq>::eq(&operations[i], action) {
+            assert(operations@[i as int]@ == action@);
+            return true;
+        }
+        i += 1;
+    }
+    false
+}
+
+pub enum MethodIssue {
+    Missing,
+    Ambiguous,
+}
+
+/// Missing methods precede the reserved name and cardinality checks.
+pub fn admit_method<'a, T>(id: &str, definitions: Option<&'a Vec<T>>)
+    -> (method: Result<&'a T, MethodIssue>)
+    ensures match definitions {
+        None => method is Err && method->Err_0 is Missing,
+        Some(defs) => if defs@.len() == 1 && id@ != "validate.delta"@ {
+            method matches Ok(value) && *value == defs@[0]
+        } else {
+            method is Err && method->Err_0 is Ambiguous
+        },
+    },
+{
+    match definitions {
+        None => Err(MethodIssue::Missing),
+        Some(defs) => {
+            if defs.len() != 1 || <&str>::exec_eq(id, "validate.delta") {
+                Err(MethodIssue::Ambiguous)
+            } else {
+                Ok(&defs[0])
+            }
+        },
+    }
+}
+
+/// A later declaration contributes one predecessor and cannot replace the retained method.
+pub fn merge_operation<T>(
+    graph: &mut OperationGraph<(T, u64, usize)>,
+    id: String,
+    declaration: (T, u64, usize),
+    previous: Option<String>,
+) -> (admitted: bool)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+    ensures
+        admitted == (!old(graph)@.contains_key(id)
+            || (old(graph)@[id].0.1 == declaration.1 && old(graph)@[id].0.2 == declaration.2)),
+        !admitted ==> graph@ == old(graph)@,
+        admitted ==> graph@.dom() =~= old(graph)@.dom().insert(id),
+        admitted ==> forall|other: String| other != id && #[trigger] old(graph)@.contains_key(other)
+            ==> graph@[other] == old(graph)@[other],
+        admitted ==> graph@[id].0 == if old(graph)@.contains_key(id) { old(graph)@[id].0 } else { declaration },
+        admitted ==> graph@[id].1@ =~= {
+            let before = if old(graph)@.contains_key(id) { old(graph)@[id].1@ } else { Set::empty() };
+            match previous { Some(p) => before.insert(p), None => before }
+        },
+{
+    broadcast use vstd::std_specs::btree::axiom_deref_key_removed;
+    broadcast use vstd::std_specs::btree::axiom_maps_deref_key_to_value;
+    let ghost before = graph@;
+    let (method, mut predecessors) = match graph.remove(&id) {
+        Some(node) => {
+            if node.0.1 != declaration.1 || node.0.2 != declaration.2 {
+                graph.insert(id, node);
+                assert(graph@ =~= before);
+                return false;
+            }
+            node
+        },
+        None => (declaration, BTreeSet::new()),
+    };
+    if let Some(predecessor) = previous {
+        predecessors.insert(predecessor);
+    }
+    graph.insert(id, (method, predecessors));
+    assert(graph@.dom() =~= before.dom().insert(id));
+    true
+}
 
 fn first_ready<'a, V>(pending: &'a OperationGraph<V>, finished: &BTreeSet<String>)
     -> (ready: Option<&'a String>)

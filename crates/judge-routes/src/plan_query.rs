@@ -264,7 +264,7 @@ pub fn unit_declarations_with(
         unit: BTreeSet<String>,
     }
     let q: Query = serde_json::from_reader(input).map_err(|e| e.to_string())?;
-    if !q.unit.is_subset(&q.global) {
+    if !crate::verified_admission::predecessors_ready(&q.unit, &q.global) {
         return Err("E_UNIT_ASSIGNMENT: unit selection exceeds global selection".into());
     }
     let binding = crate::binding(&q.request, &q.effective_inputs);
