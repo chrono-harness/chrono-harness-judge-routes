@@ -15,7 +15,11 @@ use vstd::{prelude::*, vpanic as panic};
 mod release_observation;
 
 #[cfg(not(verus_keep_ghost))]
+use chrono_judge_routes as library;
+#[cfg(not(verus_keep_ghost))]
 use chrono_judge_routes::source_plan::{Reply, bind_coverage_reply};
+#[cfg(verus_keep_ghost)]
+use policy::library;
 #[cfg(verus_keep_ghost)]
 use policy::source_plan::{Reply, bind_coverage_reply};
 
@@ -171,6 +175,89 @@ fn required_runner_response(success: bool, raw: Vec<u8>, err: Vec<u8>, sent: Res
 fn expect(value: bool)
     requires value,
 { if !value { panic!(); } }
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn route_impact_preserves_original_schema_and_delta_admission() {
+    proof {
+        reveal_strlit("chrono-filemap-impact/v6");
+        reveal_strlit("chrono-filemap-impact/v5");
+        assert("chrono-filemap-impact/v6"@[23] != "chrono-filemap-impact/v5"@[23]);
+    }
+    let accepted = library::admit_impact("chrono-filemap-impact/v6", true);
+    let wrong_delta = library::admit_impact("chrono-filemap-impact/v6", false);
+    let wrong_schema = library::admit_impact("chrono-filemap-impact/v5", true);
+    let both = library::admit_impact("chrono-filemap-impact/v5", false);
+    expect(accepted.is_ok());
+    expect(wrong_delta.is_err());
+    expect(wrong_schema.is_err());
+    expect(both.is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn original_coordinates_expand_only_complete_endpoint_arguments() {
+    proof {
+        reveal_strlit("{base}");
+        reveal_strlit("{candidate}");
+        reveal_strlit("before");
+        reveal_strlit("after");
+        reveal_strlit("prefix{candidate}");
+        assert("{base}"@.len() != "{candidate}"@.len());
+        assert("prefix{candidate}"@.len() != "{base}"@.len());
+        assert("prefix{candidate}"@.len() != "{candidate}"@.len());
+    }
+    let base = library::endpoint_argument("{base}", "before", "after");
+    let candidate = library::endpoint_argument("{candidate}", "before", "after");
+    let literal = library::endpoint_argument("prefix{candidate}", "before", "after");
+    expect(base.to_string() == "before".to_string());
+    expect(candidate.to_string() == "after".to_string());
+    expect(literal.to_string() == "prefix{candidate}".to_string());
+    let directory = library::compiler_directory(Some(7u8), true);
+    let no_template = library::compiler_directory(Some(7u8), false);
+    let no_directory = library::compiler_directory::<u8>(None, true);
+    expect(directory == Some(7u8));
+    expect(no_template.is_none());
+    expect(no_directory.is_none());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn plan_schema_keeps_v2_and_rejects_inexact_legacy_timeouts() {
+    proof {
+        reveal_strlit("chrono-execution-plan/v1");
+        reveal_strlit("chrono-execution-plan/v2");
+        reveal_strlit("chrono-execution-plan/v3");
+        assert("chrono-execution-plan/v3"@[23] != "chrono-execution-plan/v1"@[23]);
+        assert("chrono-execution-plan/v3"@[23] != "chrono-execution-plan/v2"@[23]);
+    }
+    let legacy = library::admit_plan_schema("chrono-execution-plan/v1", || -> (large: bool)
+        ensures !large { false });
+    let inexact = library::admit_plan_schema("chrono-execution-plan/v1", || -> (large: bool)
+        ensures large { true });
+    let current = library::admit_plan_schema("chrono-execution-plan/v2", || true);
+    let unknown = library::admit_plan_schema("chrono-execution-plan/v3", || false);
+    expect(legacy.is_ok());
+    expect(inexact.is_err());
+    expect(current.is_ok());
+    expect(unknown.is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn tool_version_replay_does_not_require_the_live_file() {
+    let retained = policy::accept_tool_version(true, false, || false);
+    let live = policy::accept_tool_version(true, true, || -> (same: bool)
+        ensures !same { false });
+    let mismatch = policy::accept_tool_version(false, false, || true);
+    expect(retained.is_ok());
+    expect(live.is_err());
+    expect(mismatch.is_err());
+    let reused = policy::retain_or_observe(Some(7u8), || Err::<u8, u8>(8));
+    let unavailable = policy::retain_or_observe(None, || -> (observed: Result<u8, u8>)
+        ensures observed == Err::<u8, u8>(8) { Err(8) });
+    let newly_observed = policy::retain_or_observe(None, || -> (observed: Result<u8, u8>)
+        ensures observed == Ok::<u8, u8>(9) { Ok(9) });
+    expect(matches!(reused, Ok(7)));
+    expect(matches!(unavailable, Err(8)));
+    expect(matches!(newly_observed, Ok(9)));
+}
 
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn plan_admission_requires_present_and_unique_declarations() {

@@ -8,7 +8,7 @@ use vstd::prelude::*;
 
 #[cfg(verus_keep_ghost)]
 #[path = "lib.rs"]
-mod library;
+pub mod library;
 
 #[cfg(verus_keep_ghost)]
 #[path = "units.rs"]
@@ -465,7 +465,105 @@ pub fn receipt_target_matches(plan: &String, expected_plan: &String, operation: 
     -> (matches: bool)
     ensures matches == (plan@ == expected_plan@ && operation@ == expected_operation@),
 {
-    String::eq(plan, expected_plan) && String::eq(operation, expected_operation)
+    plan_identity_matches(plan, expected_plan) && String::eq(operation, expected_operation)
+}
+
+pub fn plan_identity_matches(plan: &String, expected: &String) -> (matches: bool)
+    ensures matches == (plan@ == expected@),
+{
+    String::eq(plan, expected)
+}
+
+/// Standard-library path, argv and map comparisons describe the original invocation.
+pub struct VersionInvocation {
+    pub absolute_path: bool,
+    pub same_basename: bool,
+    pub same_executable: bool,
+    pub same_argv: bool,
+    pub same_directory: bool,
+    pub same_environment: bool,
+    pub same_stdout_bytes: bool,
+}
+
+pub fn retained_version_matches(
+    invocation: VersionInvocation,
+    program: &str,
+    expected_program: &str,
+    digest: &String,
+    observed_digest: &String,
+    version: &str,
+    expected_version: Option<&str>,
+) -> (matches: bool)
+    ensures matches == (
+        program@ == expected_program@ && invocation.absolute_path && invocation.same_basename
+        && invocation.same_executable && digest@ == observed_digest@ && invocation.same_argv
+        && invocation.same_directory && invocation.same_environment
+        && (expected_version matches Some(expected) && version@ == expected@)
+        && invocation.same_stdout_bytes
+    ),
+{
+    if !<&str>::exec_eq(program, expected_program)
+        || !invocation.absolute_path || !invocation.same_basename
+        || !receipt_tool_matches(invocation.same_executable, digest, observed_digest)
+        || !invocation.same_argv || !invocation.same_directory || !invocation.same_environment
+    {
+        return false;
+    }
+    match expected_version {
+        Some(expected) => <&str>::exec_eq(version, expected) && invocation.same_stdout_bytes,
+        None => false,
+    }
+}
+
+/// An offline observation is sufficient only for collection. Live planning also verifies the file.
+pub fn accept_tool_version<F>(matches: bool, live: bool, file_matches: F) -> (result: Result<(), &'static str>)
+where
+    F: FnOnce() -> bool,
+    requires file_matches.requires(()),
+    ensures
+        !matches ==> result is Err,
+        matches && !live ==> result is Ok,
+        matches && live ==> exists|same: bool| #[trigger] file_matches.ensures((), same)
+            && (result is Ok) == same,
+        (result matches Err(e) ==> e@ == "E_TOOL_BINDING: path/version/digest/environment observation mismatch"@),
+{
+    if matches && (!live || file_matches()) {
+        Ok(())
+    } else {
+        Err("E_TOOL_BINDING: path/version/digest/environment observation mismatch")
+    }
+}
+
+pub fn retain_or_observe<T, E, F>(retained: Option<T>, observe: F) -> (result: Result<T, E>)
+where
+    F: FnOnce() -> Result<T, E>,
+    requires observe.requires(()),
+    ensures match retained {
+        Some(tool) => result == Ok::<T, E>(tool),
+        None => observe.ensures((), result),
+    },
+{
+    match retained {
+        Some(tool) => Ok(tool),
+        None => observe(),
+    }
+}
+
+/// A file from either registered source can supply an operation's tool.
+pub fn admit_tool_origin<F, G>(external_input: F, candidate_file: G) -> (registered: bool)
+where
+    F: FnOnce() -> bool,
+    G: FnOnce() -> bool,
+    requires external_input.requires(()), candidate_file.requires(()),
+    ensures exists|external: bool| #[trigger] external_input.ensures((), external) &&
+        if external {
+            registered
+        } else {
+            exists|candidate: bool| #[trigger] candidate_file.ensures((), candidate)
+                && registered == candidate
+        },
+{
+    external_input() || candidate_file()
 }
 
 /// Only compute the seal of the whole receipt when the declared method matches.
