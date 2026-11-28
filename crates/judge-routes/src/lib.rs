@@ -17,6 +17,7 @@ use protocol::{Request, Scope};
 
 #[cfg(not(verus_keep_ghost))]
 use verus_builtin_macros::verus;
+use vstd::contrib::exec_spec::ExecSpecEq;
 #[cfg(verus_keep_ghost)]
 use vstd::prelude::*;
 
@@ -36,6 +37,77 @@ pub(crate) fn hex_pair(byte: u8) -> (digits: (u8, u8))
         digits.1 as int == if byte % 16 < 10 { 48 + byte as int % 16 } else { 87 + byte as int % 16 },
 {
     (hex_digit(byte / 16), hex_digit(byte % 16))
+}
+
+/// Select the coordinates of the original request without interpolating literals.
+pub fn endpoint_argument<'a>(literal: &'a str, base: &'a str, candidate: &'a str)
+    -> (expanded: &'a str)
+    ensures expanded@ == if literal@ == "{base}"@ { base@ }
+        else if literal@ == "{candidate}"@ { candidate@ } else { literal@ },
+{
+    if <&str>::exec_eq(literal, "{base}") { base }
+    else if <&str>::exec_eq(literal, "{candidate}") { candidate }
+    else { literal }
+}
+
+/// The runner's compiler protocol places its output argument at slot ten.
+pub fn compiler_output(argv: &[String]) -> (output: Option<&String>)
+    ensures match output {
+        Some(arg) => argv@.len() > 10 && *arg == argv@[10],
+        None => argv@.len() <= 10,
+    },
+{
+    if argv.len() > 10 { Some(&argv[10]) } else { None }
+}
+
+pub fn compiler_directory<T>(directory: Option<T>, output_template: bool) -> (result: Option<T>)
+    ensures result == if output_template { directory } else { None },
+{
+    if output_template { directory } else { None }
+}
+
+/// JSON and canonical hashing supply the ordered DELTA comparison and plan digest.
+pub fn admit_impact(schema: &str, same_delta: bool) -> (result: Result<(), &'static str>)
+    ensures
+        (result is Ok) == (schema@ == "chrono-filemap-impact/v6"@ && same_delta),
+        (result matches Err(e) ==> e@ == "E_IMPACT: identity"@),
+{
+    if <&str>::exec_eq(schema, "chrono-filemap-impact/v6") && same_delta {
+        Ok(())
+    } else {
+        Err("E_IMPACT: identity")
+    }
+}
+
+pub fn admit_plan_schema<F>(schema: &str, legacy_has_large_timeout: F) -> (result: Result<(), &'static str>)
+where
+    F: FnOnce() -> bool,
+    requires legacy_has_large_timeout.requires(()),
+    ensures
+        schema@ == "chrono-execution-plan/v2"@ ==> result is Ok,
+        schema@ != "chrono-execution-plan/v2"@ && schema@ != "chrono-execution-plan/v1"@
+            ==> (result matches Err(e) && e@ == "E_PLAN_IDENTITY: unknown plan schema"@),
+        schema@ == "chrono-execution-plan/v1"@ ==>
+            exists|large: bool| #[trigger] legacy_has_large_timeout.ensures((), large) &&
+                if large {
+                    result matches Err(e) &&
+                        e@ == "E_PLAN_IDENTITY: regenerate legacy plan from its exact timeout declarations"@
+                } else { result is Ok },
+{
+    proof {
+        reveal_strlit("chrono-execution-plan/v1");
+        reveal_strlit("chrono-execution-plan/v2");
+        assert("chrono-execution-plan/v1"@[23] != "chrono-execution-plan/v2"@[23]);
+    }
+    if <&str>::exec_eq(schema, "chrono-execution-plan/v2") { return Ok(()); }
+    if !<&str>::exec_eq(schema, "chrono-execution-plan/v1") {
+        return Err("E_PLAN_IDENTITY: unknown plan schema");
+    }
+    if legacy_has_large_timeout() {
+        Err("E_PLAN_IDENTITY: regenerate legacy plan from its exact timeout declarations")
+    } else {
+        Ok(())
+    }
 }
 }
 
@@ -143,30 +215,23 @@ impl Execution {
     fn digest(&self) -> Result<String, String> {
         let mut value = serde_json::to_value(self).map_err(|e| e.to_string())?;
         value.as_object_mut().unwrap().remove("identity");
-        match self.schema.as_str() {
-            "chrono-execution-plan/v2" => {}
-            "chrono-execution-plan/v1" => {
-                if self
-                    .operations
-                    .iter()
-                    .any(|op| op.timeout_seconds > serde_jcs::MAX_SAFE_INTEGER)
-                    || self.selected.values().any(|plan| {
-                        plan.timeout_seconds > serde_jcs::MAX_SAFE_INTEGER
-                            || plan
-                                .operation_bounds
-                                .values()
-                                .any(|bounds| bounds.timeout_seconds > serde_jcs::MAX_SAFE_INTEGER)
-                    })
-                {
-                    return Err("E_PLAN_IDENTITY: regenerate legacy plan from its exact timeout declarations".into());
-                }
-            }
-            _ => return Err("E_PLAN_IDENTITY: unknown plan schema".into()),
-        };
+        admit_plan_schema(&self.schema, || {
+            use declarations::decimal_timeout;
+            self.operations
+                .iter()
+                .any(|op| decimal_timeout(op.timeout_seconds))
+                || self.selected.values().any(|plan| {
+                    decimal_timeout(plan.timeout_seconds)
+                        || plan
+                            .operation_bounds
+                            .values()
+                            .any(|bounds| decimal_timeout(bounds.timeout_seconds))
+                })
+        })?;
         digest_value(value)
     }
     fn validate_graph(&self) -> Result<(), String> {
-        if self.identity != self.digest()? {
+        if !verified_admission::plan_identity_matches(&self.identity, &self.digest()?) {
             return Err("E_PLAN_IDENTITY".into());
         }
         let mut preceding = BTreeSet::new();
@@ -215,24 +280,21 @@ pub fn operation_state_path(report_path: &str, run: &Value) -> String {
 }
 #[cfg(not(verus_keep_ghost))]
 pub fn expand(argv: &[String], binding: &Value) -> Result<Vec<String>, String> {
+    let base = binding["base"].as_str().unwrap_or("");
+    let candidate = binding["candidate"].as_str().unwrap_or("");
     let args: Vec<String> = argv
         .iter()
-        .map(|a| match a.as_str() {
-            "{base}" => binding["base"].as_str().unwrap_or("").into(),
-            "{candidate}" => binding["candidate"].as_str().unwrap_or("").into(),
-            _ => a.clone(),
-        })
+        .map(|arg| endpoint_argument(arg, base, candidate).to_owned())
         .collect();
-    if let Some(directory) = binding["operation_state"].as_str() {
-        if args
-            .get(10)
-            .is_some_and(|arg| arg.starts_with("{operation_state}/"))
-        {
-            return serde_json::from_value(evidence::compiler(
-                json!({"operation":"bind","directory":directory,"argv":args}),
-            )?)
-            .map_err(|e| e.to_string());
-        }
+    let directory = compiler_directory(
+        binding["operation_state"].as_str(),
+        compiler_output(&args).is_some_and(|arg| arg.starts_with("{operation_state}/")),
+    );
+    if let Some(directory) = directory {
+        return serde_json::from_value(evidence::compiler(
+            json!({"operation":"bind","directory":directory,"argv":args}),
+        )?)
+        .map_err(|e| e.to_string());
     }
     Ok(args)
 }
@@ -379,16 +441,13 @@ fn prepare_inner(
             .iter()
             .filter(|t| t["id"] == *id)
             .collect();
-        if defs.len() != 1 {
+        let Some(&t) = verified_admission::unique_action(&defs) else {
             return Err(format!("E_ROUTE_AMBIGUOUS: tool {id}"));
-        }
-        let t = defs[0];
+        };
         let program = t["program"].as_str().ok_or("tool program")?;
         let argv: Vec<String> =
             serde_json::from_value(t["version_argv"].clone()).map_err(|e| e.to_string())?;
-        let tool = if let Some(tool) = reused.get(id) {
-            tool.clone()
-        } else {
+        let tool = verified_admission::retain_or_observe(reused.get(id).cloned(), || {
             evidence::tool(
                 &root,
                 program,
@@ -396,8 +455,8 @@ fn prepare_inner(
                 &environment,
                 op.timeout_seconds,
                 op.output_limit_bytes,
-            )?
-        };
+            )
+        })?;
         if strict || t["expected_version"].is_string() {
             validate_tool(
                 &tool,
@@ -496,28 +555,33 @@ fn validate_tool_inner(
 ) -> Result<(), String> {
     let actual = &tool.version;
     process_success(actual).map_err(|e| format!("E_TOOL_BINDING: {e}"))?;
-    let mut invocation = vec![tool.path.to_str().ok_or("tool path")?.to_string()];
-    invocation.extend_from_slice(argv);
-    if tool.program != program
-        || !tool.path.is_absolute()
-        || tool.path.file_name().and_then(|s| s.to_str()) != Some(&tool.basename)
-        || actual.executable != tool.path
-        || actual.sha256 != tool.sha256
-        || actual.argv != invocation
-        || actual.cwd != root
-        || actual.environment != *env
-        || expected.is_none()
-        || expected != Some(actual.stdout.trim_end())
-        || actual.stdout.as_bytes() != actual.stdout_bytes
-        || live
-            && fs::read(&tool.path)
-                .map(|b| crate::sha256(&b))
-                .ok()
-                .as_ref()
-                != Some(&tool.sha256)
-    {
-        return Err("E_TOOL_BINDING: path/version/digest/environment observation mismatch".into());
-    }
+    let executable = tool.path.to_str().ok_or("tool path")?;
+    let matches = verified_admission::retained_version_matches(
+        verified_admission::VersionInvocation {
+            absolute_path: tool.path.is_absolute(),
+            same_basename: tool.path.file_name().and_then(|s| s.to_str()) == Some(&tool.basename),
+            same_executable: actual.executable == tool.path,
+            same_argv: actual
+                .argv
+                .iter()
+                .map(String::as_str)
+                .eq(std::iter::once(executable).chain(argv.iter().map(String::as_str))),
+            same_directory: actual.cwd == root,
+            same_environment: actual.environment == *env,
+            same_stdout_bytes: actual.stdout.as_bytes() == actual.stdout_bytes,
+        },
+        &tool.program,
+        program,
+        &tool.sha256,
+        &actual.sha256,
+        actual.stdout.trim_end(),
+        expected,
+    );
+    verified_admission::accept_tool_version(matches, live, || {
+        fs::read(&tool.path)
+            .map(|bytes| crate::sha256(&bytes))
+            .is_ok_and(|digest| digest == tool.sha256)
+    })?;
     Ok(())
 }
 #[cfg(not(verus_keep_ghost))]
@@ -805,9 +869,7 @@ fn evaluate(req: &Request, git: &mut Value) -> Result<BTreeMap<String, Value>, S
         &env,
         |command, input| commands::run(&req.candidate.root, command, input),
     )?;
-    if impact.schema != "chrono-filemap-impact/v6" || impact.delta != req.delta {
-        return Err("E_IMPACT: identity".into());
-    }
+    admit_impact(&impact.schema, impact.delta == req.delta)?;
     let selected = if impact.retired_tests.is_empty() {
         impact.tests.into_iter().collect()
     } else {
@@ -891,26 +953,31 @@ fn evaluate(req: &Request, git: &mut Value) -> Result<BTreeMap<String, Value>, S
     };
     // Every launched tool is an explicitly retained external input or a registered candidate file.
     for tool in plan.tools.values() {
-        let registered = r.config["environment"]["inputs"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|i| {
-                req.candidate.root.join(i["location"].as_str().unwrap()) == tool.path
-                    && i["sha256"] == tool.sha256
-            })
-            || tool
-                .path
-                .strip_prefix(&req.candidate.root)
-                .ok()
-                .and_then(|p| p.to_str())
-                .is_some_and(|p| {
-                    candidate.filemap["files"]
-                        .as_array()
-                        .unwrap()
-                        .iter()
-                        .any(|f| f["path"] == p)
-                });
+        let registered = verified_admission::admit_tool_origin(
+            || {
+                r.config["environment"]["inputs"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|i| {
+                        req.candidate.root.join(i["location"].as_str().unwrap()) == tool.path
+                            && i["sha256"] == tool.sha256
+                    })
+            },
+            || {
+                tool.path
+                    .strip_prefix(&req.candidate.root)
+                    .ok()
+                    .and_then(|p| p.to_str())
+                    .is_some_and(|p| {
+                        candidate.filemap["files"]
+                            .as_array()
+                            .unwrap()
+                            .iter()
+                            .any(|f| f["path"] == p)
+                    })
+            },
+        );
         if !registered {
             return Err(format!("E_INPUT_UNDECLARED: tool {}", tool.path.display()));
         }
