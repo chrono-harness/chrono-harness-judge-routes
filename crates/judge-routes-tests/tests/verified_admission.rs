@@ -25,6 +25,11 @@ mod host_adapters;
 
 verus! {
 
+/// The deployed check is an input of this proof and its native consumer.
+pub fn native_check_script() -> &'static str {
+    include_str!("../../../check.sh")
+}
+
 #[cfg(verus_keep_ghost)]
 fn scoped_run_requires_an_original_run_and_a_derived_directory(
     report: &str, digest: &str, identity: &u64,
@@ -584,4 +589,15 @@ fn plan_identity_accepts_the_largest_admitted_timeout() {
         operation.output_limit_bytes
     ));
     digest(&operation).expect("each admitted operation must have a plan identity");
+}
+
+#[cfg(not(verus_keep_ghost))]
+#[test]
+fn native_check_matches_the_compiled_host_input() {
+    let deployed = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../check.sh");
+    assert_eq!(
+        std::fs::read(&deployed)
+            .unwrap_or_else(|error| panic!("cannot read {}: {error}", deployed.display())),
+        native_check_script().as_bytes()
+    );
 }
