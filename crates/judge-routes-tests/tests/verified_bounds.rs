@@ -33,6 +33,56 @@ fn expect(condition: bool)
 }
 
 #[cfg_attr(not(verus_keep_ghost), test)]
+fn default_and_override_limits_resolve_before_method_lookup()
+    requires vstd::laws_cmp::obeys_cmp::<String>(), vstd::laws_cmp::obeys_cmp::<&String>(),
+{
+    use policy::timeout_bounds::{Bounds, Plan};
+    use std::collections::BTreeMap;
+    broadcast use vstd::string::group_string_axioms;
+    proof {
+        reveal_strlit("compile");
+        reveal_strlit("check");
+    }
+    let mut plan = Plan {
+        operations: Vec::new(),
+        timeout_seconds: 1,
+        output_limit_bytes: 1,
+        operation_bounds: BTreeMap::new(),
+    };
+    expect(plan.steps().is_err());
+    let compile = "compile".to_string();
+    let check = "check".to_string();
+    plan.operations.push(compile.clone());
+    plan.operations.push(check.clone());
+    proof {
+        assert(compile@[1] == 'o' && check@[1] == 'h');
+        assert(compile@ != check@);
+        assert(plan.operations@ =~= seq![compile, check]);
+    }
+    plan.operation_bounds.insert(check, Bounds { timeout_seconds: u64::MAX, output_limit_bytes: 67_108_864 });
+    proof {
+        assert(plan.operations@.no_duplicates());
+        assert(plan.valid_steps());
+    }
+    match plan.steps() {
+        Ok(steps) => {
+            expect(steps.len() == 2);
+            expect(steps[0].1.timeout_seconds == 1);
+            expect(steps[1].1.timeout_seconds == u64::MAX);
+            expect(steps[1].1.output_limit_bytes == 67_108_864);
+        },
+        Err(_) => panic!(),
+    }
+
+    plan.output_limit_bytes = 0;
+    expect(plan.steps().is_err());
+    plan.output_limit_bytes = 1;
+    plan.operations.push(compile);
+    assert(plan.operations@[0] == plan.operations@[2]);
+    expect(plan.steps().is_err());
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
 fn both_streams_fit_the_declared_limit_and_fill_the_frame() {
     expect(policy::valid_stream_lengths(3, 3, 6, 3));
     expect(policy::valid_stream_lengths(0, 0, 0, 0));

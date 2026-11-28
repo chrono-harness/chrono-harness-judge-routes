@@ -247,38 +247,31 @@ pub fn order(
     let mut operations = verified_admission::OperationGraph::new();
     let mut chosen = BTreeMap::new();
     for test in selected {
-        let plan = plans
-            .get(test)
-            .ok_or_else(|| format!("E_ROUTE_MISSING: execution plan {test}"))?;
+        let plan = verified_admission::required_declaration(plans.get(test), ())
+            .map_err(|()| format!("E_ROUTE_MISSING: execution plan {test}"))?;
         let steps = plan.steps().map_err(|e| format!("{e}: {test}"))?;
-        let action = execute
-            .get(test)
-            .ok_or_else(|| format!("E_ROUTE_MISSING: unique execute action for {test}"))?;
-        if !plan.operations.contains(action) {
+        let action = verified_admission::required_declaration(execute.get(test), ())
+            .map_err(|()| format!("E_ROUTE_MISSING: unique execute action for {test}"))?;
+        if !verified_admission::contains_action(&plan.operations, action) {
             return Err(format!("E_EXECUTION_PLAN: {test} omits its execute action"));
         }
         let mut previous = None;
         for (id, bounds) in steps {
-            let timeout_seconds = bounds.timeout_seconds;
-            let output_limit_bytes = bounds.output_limit_bytes;
-            let defs = methods
-                .get(id)
-                .ok_or_else(|| format!("E_ROUTE_MISSING: {id}"))?;
-            if defs.len() != 1 || id == "validate.delta" {
-                return Err(format!("E_ROUTE_AMBIGUOUS: {id}"));
-            }
-            let ((_, shared_timeout, shared_output_limit), predecessors) =
-                operations.entry(id.to_owned()).or_insert_with(|| {
-                    (
-                        (defs[0].clone(), timeout_seconds, output_limit_bytes),
-                        BTreeSet::new(),
-                    )
-                });
-            if *shared_timeout != timeout_seconds || *shared_output_limit != output_limit_bytes {
+            let method = verified_admission::admit_method(id.as_str(), methods.get(id)).map_err(
+                |issue| match issue {
+                    verified_admission::MethodIssue::Missing => format!("E_ROUTE_MISSING: {id}"),
+                    verified_admission::MethodIssue::Ambiguous => {
+                        format!("E_ROUTE_AMBIGUOUS: {id}")
+                    }
+                },
+            )?;
+            if !verified_admission::merge_operation(
+                &mut operations,
+                id.to_owned(),
+                (method, bounds.timeout_seconds, bounds.output_limit_bytes),
+                previous,
+            ) {
                 return Err(format!("E_PLAN_BOUNDS: inconsistent shared operation {id}"));
-            }
-            if let Some(p) = previous {
-                predecessors.insert(p);
             }
             previous = Some(id.to_owned());
         }
@@ -288,7 +281,7 @@ pub fn order(
         .into_iter()
         .map(
             |(_, ((method, timeout_seconds, output_limit_bytes), predecessors))| Operation {
-                method,
+                method: method.clone(),
                 predecessors,
                 timeout_seconds,
                 output_limit_bytes,
@@ -734,9 +727,8 @@ fn unique_actions(
 ) -> BTreeMap<String, String> {
     bindings
         .into_iter()
-        .filter_map(|(id, operations)| match operations.as_slice() {
-            [operation] => Some((id, operation.clone())),
-            _ => None,
+        .filter_map(|(id, operations)| {
+            verified_admission::unique_action(&operations).map(|operation| (id, operation.clone()))
         })
         .collect()
 }
