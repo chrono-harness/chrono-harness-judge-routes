@@ -237,6 +237,88 @@ fn an_operation_is_fresh_only_once_and_every_predecessor_must_have_finished() {
     expect(policy::predecessors_ready(&required, &finished));
 }
 
+fn check_merged_operation_order(cyclic: bool)
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    let a = "A".to_string();
+    let b = "B".to_string();
+    let mut before_a = BTreeSet::new();
+    let mut before_b = BTreeSet::new();
+    if cyclic {
+        before_a.insert(b.clone());
+    }
+    before_b.insert(a.clone());
+    let mut graph = BTreeMap::new();
+    proof {
+        reveal_strlit("A");
+        reveal_strlit("B");
+        assert(a@[0] == 'A' && b@[0] == 'B');
+        assert(a != b);
+        assert(before_b@ =~= Set::empty().insert(a));
+        assert(before_a@ =~= if cyclic { Set::empty().insert(b) } else { Set::empty() });
+    }
+    graph.insert(a.clone(), (1u8, before_a));
+    graph.insert(b.clone(), (2u8, before_b));
+    let ghost declared = graph@;
+    assert(declared.dom() =~= Set::empty().insert(a).insert(b));
+    match policy::order_operations(graph) {
+        Ok(ordered) => {
+            proof {
+                let ids = policy::operation_ids(ordered@);
+                assert(ids.to_set().contains(a) && ids.to_set().contains(b));
+                assert(ids.len() > 0);
+                assert(policy::valid_operation_step(declared, ordered@, 0));
+                assert(ids.take(0).to_set() =~= Set::<String>::empty());
+                assert(ordered@[0].0 == a);
+                assert(0 < ids.len() && exists|i: int| 0 <= i < ids.len() && ids[i] == b);
+                let i = choose|i: int| 0 <= i < ids.len() && ids[i] == b;
+                assert(i > 0);
+                assert(policy::valid_operation_step(declared, ordered@, 1));
+                assert(ids.take(1) =~= seq![a]);
+                Seq::<String>::empty().lemma_push_to_set_commute(a);
+                assert(seq![a] =~= Seq::<String>::empty().push(a));
+                assert(ids.take(1).to_set() =~= Set::empty().insert(a));
+                assert(ordered@[1].0 == b);
+                if ids.len() > 2 {
+                    assert(policy::valid_operation_step(declared, ordered@, 2));
+                    assert(ids.take(2) =~= seq![a,b]);
+                    seq![a].lemma_push_to_set_commute(b);
+                    assert(seq![a,b] =~= seq![a].push(b));
+                    assert(ids.take(2).to_set() =~= Set::empty().insert(a).insert(b));
+                    assert(false);
+                }
+            }
+            expect(!cyclic);
+            expect(ordered.len() == 2);
+            expect(ordered[0].0 == a && ordered[0].1.0 == 1);
+            expect(ordered[1].0 == b && ordered[1].1.0 == 2);
+        },
+        Err(reason) => {
+            proof {
+                if !cyclic {
+                    reveal(policy::has_blocked_operations);
+                    let blocked = choose|blocked: Set<String>| policy::blocked_operations(declared, blocked);
+                    assert(!blocked.contains(a));
+                    assert(blocked.contains(b));
+                    assert(declared.dom().difference(blocked).contains(a));
+                    assert(before_b@.subset_of(declared.dom().difference(blocked)));
+                    assert(false);
+                }
+            }
+            expect(cyclic);
+            expect(reason.to_string() == "E_PLAN_CYCLE: inconsistent operation ordering".to_string());
+        },
+    }
+}
+
+#[cfg_attr(not(verus_keep_ghost), test)]
+fn merged_operation_order_rejects_a_cycle_and_orders_the_remaining_edge()
+    requires vstd::laws_cmp::obeys_cmp::<String>(),
+{
+    check_merged_operation_order(true);
+    check_merged_operation_order(false);
+}
+
 #[cfg_attr(not(verus_keep_ghost), test)]
 fn registration_decisions_cover_the_exact_retirement_query() {
     let mut request = BTreeSet::<u64>::new();
