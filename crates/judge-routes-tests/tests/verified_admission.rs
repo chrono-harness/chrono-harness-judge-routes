@@ -19,8 +19,9 @@ use chrono_judge_routes::source_plan::{Reply, bind_coverage_reply};
 #[cfg(verus_keep_ghost)]
 use policy::source_plan::{Reply, bind_coverage_reply};
 
-#[path = "../../../.chrono-harness/ci/roadmap.rs"]
-mod roadmap;
+#[rustfmt::skip]
+#[path = "../../../.chrono-harness/ci/host_adapters.rs"]
+mod host_adapters;
 
 verus! {
 
